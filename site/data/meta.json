@@ -1,0 +1,16 @@
+{
+  "generated": "2026-05-12T18:42:31Z",
+  "system_name": "(REPLACE) DSOP Reference System",
+  "system_acronym": "(REPLACE) DSOPREF",
+  "categorization": "(REPLACE) Confidentiality: Moderate, Integrity: Moderate, Availability: Moderate (CNSSI 1253; DoD overlays: <list>)",
+  "baseline": "NIST SP 800-53 Rev 5 \u2014 Moderate baseline (CNSSI 1253) + DoD-tailored values/overlays \u2014 CURATED SUBSET IN THIS FILE",
+  "authorization_status": "(REPLACE) Not yet authorized \u2014 in development; see the ATO milestone issues",
+  "authorization_type": "(REPLACE) ATO | continuous ATO (cATO) | RAISE 2.0 incorporation into an RPOC's ATO",
+  "rpoc": "(REPLACE) The RAISE Platform of Choice (RPOC) this application is incorporated into, if applicable (e.g., Overmatch Software Armory)",
+  "emass_system_id": "(REPLACE) <eMASS system ID>",
+  "repo": "your-org/your-repo",
+  "ref": "main",
+  "sha": "",
+  "run_url": "",
+  "scorecard_overall": null
+}

@@ -1,0 +1,4 @@
+# Runtime dependencies for the demonstration workload.
+# Pinned for reproducibility (CM-2 baseline configuration); Dependabot keeps these current (SI-2).
+Flask==3.0.3
+gunicorn==23.0.0

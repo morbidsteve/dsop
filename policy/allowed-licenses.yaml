@@ -1,0 +1,68 @@
+# Open-source license policy — evaluated against the CycloneDX SBOM by scripts/evidence_common.py.
+# Evidence: CM-10 (software usage restrictions), SSDF PW.4 (use well-secured / appropriately
+# licensed components), RAISE 2.0 Gate 2 (component analysis). Tune to your organization's
+# approved-OSS-license list / legal guidance.
+#
+# Matching is by SPDX license identifier (case-insensitive). Components reporting an expression
+# (e.g., "MIT OR Apache-2.0") are allowed if ANY operand is allowed. Components with no license
+# data are treated per `policy/thresholds.yaml: gates.license.fail_on_unknown`.
+
+version: 1
+
+# Permissive / weak-copyleft licenses generally acceptable for distributed/government software.
+allowed:
+  - MIT
+  - MIT-0
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - BSD-3-Clause-Clear
+  - ISC
+  - 0BSD
+  - Zlib
+  - Python-2.0
+  - PSF-2.0
+  - Unlicense
+  - CC0-1.0
+  - MPL-2.0            # weak copyleft (file-level) — usually acceptable; confirm with legal
+  - BSL-1.0            # Boost
+  - Artistic-2.0
+  - PostgreSQL
+  - WTFPL              # often allowed; some orgs disallow on professionalism grounds — adjust
+  - CC-BY-4.0          # docs/assets only
+
+# Allowed only with documented review (the report marks these "review required").
+allowed_with_review:
+  - LGPL-2.1-only
+  - LGPL-2.1-or-later
+  - LGPL-3.0-only
+  - LGPL-3.0-or-later
+  - EPL-2.0
+  - CDDL-1.0
+  - OpenSSL
+
+# Disallowed for distributed software (strong copyleft / network copyleft / non-commercial /
+# ambiguous). Presence of any of these fails the license gate (see thresholds.yaml).
+disallowed:
+  - GPL-1.0-only
+  - GPL-1.0-or-later
+  - GPL-2.0-only
+  - GPL-2.0-or-later
+  - GPL-3.0-only
+  - GPL-3.0-or-later
+  - AGPL-1.0-only
+  - AGPL-1.0-or-later
+  - AGPL-3.0-only
+  - AGPL-3.0-or-later
+  - SSPL-1.0
+  - BUSL-1.1           # Business Source License — source-available, not OSS
+  - CC-BY-NC-4.0
+  - CC-BY-NC-SA-4.0
+  - JSON               # the "shall be used for Good, not Evil" clause — generally disallowed
+  - Commons-Clause
+  - Elastic-2.0
+
+# Components to ignore entirely (e.g., your own first-party packages, internal mirrors).
+exclude_components:
+  - "pkg:pypi/sample-app"          # the demo app itself
+  # - "pkg:pypi/your-internal-lib"

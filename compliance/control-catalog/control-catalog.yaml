@@ -1,0 +1,1221 @@
+# =================================================================================================
+# DSOP Control Catalog — the master compliance file.
+#
+# This is a CURATED subset of NIST SP 800-53 Rev 5 controls: the ones a GitHub-native DevSecOps
+# pipeline provides direct, automated evidence for, plus the key process controls that frame the
+# authorization. It is intentionally NOT the full Moderate/High baseline — your program must:
+#   (1) categorize the system per CNSSI 1253 and select the full applicable baseline + DoD overlays
+#       + DoD-specific assignment values (from the RMF Knowledge Service),
+#   (2) add the remaining controls (with implementation statements / inheritance / NA determinations),
+#   (3) tailor every narrative, parameter, and `implementation_status` below to your actual system.
+#
+# `implementation_status` values used here:
+#   implemented            - delivered by this pipeline as configured
+#   hybrid                 - pipeline delivers part; the program / platform must complete the rest
+#   planned                - process/manual control the program must implement (the template provides scaffolding)
+#   inherited              - relied upon from the hosting platform / RPOC / CSP (see the Customer Responsibility Matrix)
+#   not-applicable         - assessed N/A (none below — example only)
+#
+# `responsibility`: system | common | hybrid | inherited
+# `evidence`: list of { gate: <pipeline gate id> } and/or { artifact: <glob under evidence/> } items.
+#             A control's automated test result is "Compliant" only if ALL its declared gates ran
+#             with no High/Critical related findings (see scripts/map_controls.py).
+# `assessment`: SP 800-53A — methods (Examine/Interview/Test) + the assessment objective.
+# `raise_gate`: RAISE 2.0 RIG Security Gate number(s) this control relates to (1..8), if any.
+# `ssdf`: NIST SP 800-218 SSDF practice id(s).
+# `ccis`: example Control Correlation Identifiers — CONFIRM the authoritative CCI list for your
+#          baseline (DoD CCI list / NIST 800-53A); these are illustrative.
+# =================================================================================================
+
+metadata:
+  system_name: "(REPLACE) DSOP Reference System"
+  system_acronym: "(REPLACE) DSOPREF"
+  description: >
+    (REPLACE) A containerized application (or set of microservices) developed and operated through
+    a GitHub-native DevSecOps pipeline, deployed onto an authorized DoD/Navy DevSecOps platform.
+  categorization: "(REPLACE) Confidentiality: Moderate, Integrity: Moderate, Availability: Moderate (CNSSI 1253; DoD overlays: <list>)"
+  baseline: "NIST SP 800-53 Rev 5 — Moderate baseline (CNSSI 1253) + DoD-tailored values/overlays — CURATED SUBSET IN THIS FILE"
+  impact_level: "(REPLACE) IL2 / IL4 / IL5 — per the DoD Cloud Computing SRG"
+  authorization_type: "(REPLACE) ATO | continuous ATO (cATO) | RAISE 2.0 incorporation into an RPOC's ATO"
+  authorization_status: "(REPLACE) Not yet authorized — in development; see the ATO milestone issues"
+  raise_rpoc: "(REPLACE) The RAISE Platform of Choice (RPOC) this application is incorporated into, if applicable (e.g., Overmatch Software Armory)"
+  emass_system_id: "(REPLACE) <eMASS system ID>"
+  ditpr_don_id: "(REPLACE) <DITPR-DON ID>"
+  dadms_id: "(REPLACE) <DADMS ID>"
+  authorization_boundary_summary: >
+    (REPLACE) The application containers, their source repository, the GitHub Actions CI/CD pipeline,
+    the OCI artifact registry, and the application's runtime namespace on the platform. Underlying
+    cloud/infrastructure, the DevSecOps platform/software factory, the orchestrator, and shared
+    services are inherited/common controls provided by the RPOC/CSP (see the Customer Responsibility Matrix).
+  references: "See compliance/references.md for the full authority list and version caveats."
+  last_reviewed: "(REPLACE) YYYY-MM-DD by (ISSM/ISSO)"
+
+controls:
+
+  # --------------------------------------------------------------------------- AC — Access Control
+  - id: AC-2
+    family: AC
+    title: Account Management
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-000015, CCI-002130]
+    narrative: >
+      Application and service accounts (CI/CD service accounts, registry pull/push identities,
+      runtime service accounts) are defined, assigned to roles, provisioned with least privilege,
+      and reviewed. GitHub org/repo membership and team-based access (CODEOWNERS) govern who can
+      change code, workflows, and compliance content; short-lived OIDC tokens are preferred over
+      long-lived secrets. Platform/IdP account management is inherited from the RPOC/CSP.
+    evidence:
+      - { gate: supply-chain }   # OpenSSF Scorecard checks Branch-Protection / Code-Review / Token-Permissions
+      - { gate: iac }            # service-account settings in deploy/k8s (automountServiceAccountToken: false, etc.)
+      - { artifact: "scorecard/**" }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Account types, role assignments, least-privilege provisioning, and periodic account reviews are defined and performed."
+    raise_gate: []
+    ssdf: [PO.2, PS.1]
+
+  - id: AC-3
+    family: AC
+    title: Access Enforcement
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-000213]
+    narrative: >
+      Approved authorizations are enforced: GitHub branch protection + required Code Owner reviews
+      gate changes; RBAC and Kubernetes Pod Security admission ("restricted") gate workloads;
+      Conftest/OPA Rego policy rejects non-conformant IaC; cloud IAM (inherited) gates infrastructure.
+    evidence:
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Logical access to system functions and information is enforced consistent with applicable access-control policy."
+    raise_gate: []
+    ssdf: [PS.1]
+
+  - id: AC-6
+    family: AC
+    title: Least Privilege
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000225]
+    narrative: >
+      Least privilege is enforced throughout: containers run as a non-root user with all Linux
+      capabilities dropped, no privilege escalation, and a read-only root filesystem (deploy/k8s,
+      enforced by Conftest/OPA and verified by the container gate); CI tokens are scoped per job;
+      workflow `permissions:` blocks are minimized; Dockerfiles must set a non-root USER.
+    evidence:
+      - { gate: container }
+      - { gate: iac }
+      - { artifact: "container/**" }
+      - { artifact: "iac/conftest-k8s.json" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Users/processes are granted only the privileges necessary to accomplish assigned tasks; privileged functions are restricted."
+    raise_gate: [4]
+    ssdf: [PW.9, PO.5]
+
+  # --------------------------------------------------------------------------- AT — Awareness & Training
+  - id: AT-2
+    family: AT
+    title: Literacy Training and Awareness
+    baseline: [low, moderate, high]
+    implementation_status: planned
+    responsibility: common
+    ccis: [CCI-000112]
+    narrative: >
+      (PROGRAM TO COMPLETE) Role-based security awareness and secure-development training is
+      assigned and tracked for developers, ISSM/ISSO, and operators (SSDF PO.2.2). Record completion
+      evidence (LMS exports) and reference it here. The pipeline itself contributes a "security
+      champions"/policy-as-code culture but does not substitute for training records.
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Provide training completion records." }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Security literacy training is provided and refreshed; role-based training (incl. secure development) is provided to those with significant security responsibilities."
+    raise_gate: []
+    ssdf: [PO.2]
+
+  # --------------------------------------------------------------------------- AU — Audit & Accountability
+  - id: AU-2
+    family: AU
+    title: Event Logging
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-000130, CCI-001571]
+    narrative: >
+      Auditable events are defined for the application (request/error logging to stdout, captured
+      by the platform), the CI/CD pipeline (GitHub audit log of merges, workflow runs, deployments,
+      access changes), and the registry (push/pull). Platform/orchestrator/cloud audit-event
+      definitions are inherited.
+    evidence:
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine]
+      objective: "The organization-defined set of auditable events is identified and configured for logging."
+    raise_gate: []
+    ssdf: [PO.4]
+
+  - id: AU-6
+    family: AU
+    title: Audit Record Review, Analysis, and Reporting
+    baseline: [low, moderate, high]
+    implementation_status: planned
+    responsibility: hybrid
+    ccis: [CCI-000148]
+    narrative: >
+      (PROGRAM/PLATFORM TO COMPLETE) Audit records (application logs, CI/CD audit log, registry
+      logs) are shipped to the platform's centralized logging/SIEM and reviewed for indicators of
+      compromise per the ConMon strategy; anomalies are reported to the ISSM/AO. Reference the
+      SIEM dashboards/alerts and review cadence here. (Active analysis/response also supports the
+      cATO "active cyber defense" pillar — see crosswalks/cato-evaluation-crosswalk.md.)
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)" }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Audit records are reviewed/analyzed for indications of inappropriate or unusual activity; findings are reported."
+    raise_gate: []
+    ssdf: [RV.1]
+
+  - id: AU-12
+    family: AU
+    title: Audit Record Generation
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-000169, CCI-000172]
+    narrative: >
+      The application emits structured access/error logs; the CI/CD platform generates audit
+      records for security-relevant events (workflow runs, approvals, secret access, deployments);
+      the registry and orchestrator generate audit records (inherited/common). Pipeline run logs
+      and the consolidated evidence index provide a tamper-evident record of every assessment.
+    evidence:
+      - { gate: iac }
+      - { gate: body-of-evidence }
+      - { artifact: "evidence_index.json" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "The system provides audit-record generation capability for the defined auditable events at the defined components."
+    raise_gate: []
+    ssdf: [PO.4]
+
+  # --------------------------------------------------------------------------- CA — Assessment, Authorization, Monitoring
+  - id: CA-2
+    family: CA
+    title: Control Assessments
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: hybrid
+    ccis: [CCI-000060, CCI-002086]
+    narrative: >
+      Controls are assessed continuously by the DevSecOps pipeline (SAST, SCA, SBOM, secrets, IaC,
+      container scan, DAST, STIG/SCAP, license, supply-chain) plus the developer-testing gate, with
+      results normalized, mapped to controls, and rolled up into controls.json / the dashboard /
+      the eMASS package on every run. The independent Security Control Assessor (SCA) reviews this
+      evidence, performs any additional Examine/Interview/Test activities, and signs the Security
+      Assessment Report (SAR). For RAISE, the SCA reviews the deltas since the last quarterly review.
+    evidence:
+      - { gate: sast }
+      - { gate: sca }
+      - { gate: container }
+      - { gate: iac }
+      - { gate: dast }
+      - { gate: stig }
+      - { gate: secrets }
+      - { gate: license }
+      - { gate: build-test }
+      - { gate: body-of-evidence }
+      - { artifact: "findings.json" }
+      - { artifact: "boe/controls.json" }
+    assessment:
+      methods: [Examine, Test, Interview]
+      objective: "Controls are assessed per an approved assessment plan; results are documented in a security assessment report."
+    raise_gate: [1, 2, 3, 4, 5]
+    ssdf: [PW.7, PW.8, RV.1, PO.4]
+
+  - id: CA-5
+    family: CA
+    title: Plan of Action and Milestones
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000366, CCI-002723]
+    narrative: >
+      A POA&M is auto-generated each pipeline run from open findings above the policy threshold
+      (policy/thresholds.yaml), in the eMASS column layout (evidence/boe/poam.csv), with scheduled
+      completion dates computed from the remediation SLA (RAISE: raw High+ in production = 21
+      calendar days), milestones, source, severity (CAT), residual risk, and overdue/out-of-RAISE-
+      scope flags. Human-managed POA&M items (risk acceptances, process weaknesses, inherited-control
+      gaps) are tracked via the POA&M issue template and merged into the same view.
+    evidence:
+      - { gate: body-of-evidence }
+      - { artifact: "boe/poam.json" }
+      - { artifact: "boe/poam.csv" }
+    assessment:
+      methods: [Examine]
+      objective: "A POA&M is developed and maintained to track remediation of weaknesses/deficiencies, with milestones and resources."
+    raise_gate: []
+    ssdf: [RV.2]
+
+  - id: CA-6
+    family: CA
+    title: Authorization
+    baseline: [low, moderate, high]
+    implementation_status: planned
+    responsibility: hybrid
+    ccis: [CCI-000270]
+    narrative: >
+      (AO ACTION) The Authorizing Official reviews the Body of Evidence (SSP, SAR, POA&M, this
+      dashboard) and renders an authorization decision (ATO / ATO with conditions / IATT / DATO).
+      For cATO, the AO + Component CISO present the BoE to the DoD CISO. For RAISE, the application
+      is incorporated into the RPOC's ATO by the AO and the RPOC ISSM (delegated assessment
+      authority); the AO records the decision in eMASS and sets the next review date. Use
+      compliance/templates/authorization-decision-document.md.
+    evidence:
+      - { artifact: "emass-package/MANIFEST.json" }
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Pending AO decision." }
+    assessment:
+      methods: [Examine]
+      objective: "An authorization decision is rendered by the AO based on an acceptable level of risk; the decision is documented and communicated."
+    raise_gate: [6]
+    ssdf: [PO.2]
+
+  - id: CA-7
+    family: CA
+    title: Continuous Monitoring
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: hybrid
+    ccis: [CCI-000274, CCI-002359]
+    narrative: >
+      The pipeline runs on every push/PR, on a daily schedule, and on demand; each run re-assesses
+      all automated controls, refreshes the dashboard, updates the auto-maintained "ATO Status"
+      issue, and appends a dated snapshot to evidence/boe/conmon_history.json (findings by severity,
+      control results, POA&M size & overdue count, SBOM component count). This implements an
+      Information Security Continuous Monitoring strategy (SP 800-137) and is the basis for cATO
+      Pillar 1. See compliance/conmon/continuous-monitoring-strategy.md. Runtime/infrastructure
+      ConMon (host/cloud vulnerability scanning, log analysis, threat detection) is provided by the
+      platform/RPOC (inherited/common); for RAISE edge/disconnected nodes, ConMon is met at the
+      Staging tier.
+    evidence:
+      - { gate: body-of-evidence }
+      - { artifact: "boe/conmon_history.json" }
+      - { artifact: "boe/controls_summary.json" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "A continuous monitoring strategy is implemented: ongoing control assessments, status reporting, and risk-determination updates at the defined frequency."
+    raise_gate: []
+    ssdf: [RV.1, PO.4]
+
+  - id: CA-8
+    family: CA
+    title: Penetration Testing
+    baseline: [high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-002048]
+    narrative: >
+      Automated dynamic security testing (OWASP ZAP baseline) runs against the deployed application
+      each pipeline run as a continuous, lightweight check. Full penetration testing is performed at
+      the AO-defined frequency (and on AO request — RAISE: the RPOC supports pen testing as the AO
+      requests); pen-test reports are added to the BoE and findings flow to the POA&M.
+    evidence:
+      - { gate: dast }
+      - { artifact: "dast/**" }
+    assessment:
+      methods: [Test, Examine]
+      objective: "Penetration testing is conducted at the defined frequency by qualified testers; results are remediated/tracked."
+    raise_gate: [5]
+    ssdf: [PW.8]
+
+  # --------------------------------------------------------------------------- CM — Configuration Management
+  - id: CM-2
+    family: CM
+    title: Baseline Configuration
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000363, CCI-001821]
+    narrative: >
+      The system's baseline configuration is fully version-controlled: application source, the
+      Dockerfile (pinned base image), Kubernetes manifests, Terraform IaC, the CI/CD workflows, the
+      policy-as-code, and the compliance content all live in this repository under change control.
+      Dependency and base-image versions are pinned (requirements.txt, Dockerfile) and updated via
+      Dependabot. The IaC/container gates verify that images are version-pinned (not `:latest`).
+    evidence:
+      - { gate: iac }
+      - { gate: container }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine]
+      objective: "A current baseline configuration is developed, documented, and maintained under configuration control."
+    raise_gate: []
+    ssdf: [PW.6, PS.1]
+
+  - id: CM-3
+    family: CM
+    title: Configuration Change Control
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-000372, CCI-001744]
+    narrative: >
+      All changes go through pull requests with required reviews (branch protection + CODEOWNERS),
+      required passing status checks (the devsecops-pipeline), the change-control checklist in the
+      PR template (incl. a security impact analysis — CM-4), and a CHANGELOG entry (RAISE App-Owner
+      release record / SA-10). Merges and deployments are recorded in the GitHub audit log. A
+      configuration control board / ISSM review (RAISE Gate 6) covers security-relevant changes.
+    evidence:
+      - { gate: supply-chain }   # Scorecard: Branch-Protection / Code-Review / CI-Tests
+      - { gate: review }
+      - { artifact: "scorecard/**" }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Proposed changes are reviewed/approved/tested; change records are retained; security impact is analyzed."
+    raise_gate: [6]
+    ssdf: [PW.2, PS.1]
+
+  - id: CM-4
+    family: CM
+    title: Impact Analyses
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-000373]
+    narrative: >
+      Every PR includes a security impact analysis (does the change affect the authorization
+      boundary, data flows, ports/protocols/services, trust relationships, privileges, or specific
+      controls?). Material changes trigger SSP/PPSM updates and ISSM/SCA notification. The PR
+      template makes this analysis a required, auditable step.
+    evidence:
+      - { gate: review }
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Evidence is the PR review history; sample PRs to verify." }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Security impact of changes is analyzed prior to implementation."
+    raise_gate: [6]
+    ssdf: [PW.2]
+
+  - id: CM-5
+    family: CM
+    title: Access Restrictions for Change
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000345]
+    narrative: >
+      Only authorized personnel can make changes: branch protection prevents direct pushes to main,
+      CODEOWNERS requires the right teams to approve changes to code / workflows / policy /
+      compliance content, separation of duties is enforced (author ≠ sole approver), signed commits
+      are required, and CI/CD and registry permissions are role-scoped. Workflow `permissions:`
+      blocks are minimized; `id-token`/`packages` write is granted only to the jobs that need it.
+    evidence:
+      - { gate: supply-chain }
+      - { artifact: "scorecard/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Physical and logical access restrictions associated with changes are defined, documented, approved, and enforced."
+    raise_gate: []
+    ssdf: [PS.1, PO.5]
+
+  - id: CM-6
+    family: CM
+    title: Configuration Settings
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: hybrid
+    ccis: [CCI-000366, CCI-001755]
+    narrative: >
+      Secure configuration settings are established and enforced: container images are built non-
+      root, minimal, with a healthcheck (verified by Hadolint/Dockle and the container gate);
+      Kubernetes workloads use the "restricted" Pod Security profile, RuntimeDefault seccomp,
+      read-only root fs, dropped capabilities (verified by kube-linter, Checkov, Conftest/OPA);
+      IaC is scanned for secure settings (Checkov/KICS/Trivy-config); STIG/SCAP evaluation
+      (OpenSCAP, against the applicable DISA SRG/STIG content) checks the platform/OS configuration;
+      the application disables debug mode and sets security headers. Deviations are tracked in the
+      POA&M / STIG checklist.
+    evidence:
+      - { gate: iac }
+      - { gate: container }
+      - { gate: stig }
+      - { artifact: "iac/**" }
+      - { artifact: "container/**" }
+      - { artifact: "stig/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Configuration settings reflect the most restrictive mode consistent with operational requirements (e.g., STIG/CIS benchmarks); deviations are documented and approved."
+    raise_gate: [4]
+    ssdf: [PW.9, PW.6]
+
+  - id: CM-7
+    family: CM
+    title: Least Functionality
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: hybrid
+    ccis: [CCI-000381, CCI-001762]
+    narrative: >
+      The system is configured to provide only essential capabilities: minimal/distroless-style
+      runtime images (multi-stage build leaves build tools out), `--no-install-recommends` and
+      cleaned package caches, no shell needed at runtime, hostNetwork/hostPath/privileged disallowed
+      by Conftest/OPA, NetworkPolicy default-deny with narrow allows, and only the required ports
+      exposed (registered in PPSM). Unnecessary functions/ports/services are disabled.
+    evidence:
+      - { gate: container }
+      - { gate: iac }
+      - { artifact: "container/**" }
+      - { artifact: "iac/conftest-k8s.json" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Only essential capabilities are provided; use of nonsecure/unnecessary functions, ports, protocols, software, and services is prohibited or restricted."
+    raise_gate: [4]
+    ssdf: [PW.9]
+
+  - id: CM-8
+    family: CM
+    title: System Component Inventory
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000389, CCI-000408]
+    narrative: >
+      An accurate, current inventory of software components is maintained as a Software Bill of
+      Materials (SPDX 2.3 and CycloneDX 1.5), generated by Syft for both the source tree and the
+      built container image on every run, attached as Release assets and a cosign attestation on
+      the image, validated against the NTIA SBOM minimum elements, and rolled into the
+      hardware/software baseline in the eMASS package. The hardware/infrastructure inventory is
+      provided by the platform/RPOC (inherited/common).
+    evidence:
+      - { gate: sbom }
+      - { gate: container }
+      - { artifact: "sbom/**" }
+    assessment:
+      methods: [Examine]
+      objective: "An inventory of system components is developed and maintained that accurately reflects the system and is at the level of granularity necessary for tracking and reporting."
+    raise_gate: [2]
+    ssdf: [PS.3]
+
+  - id: CM-10
+    family: CM
+    title: Software Usage Restrictions
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-001731]
+    narrative: >
+      Open-source components are evaluated against the approved-license policy (policy/allowed-
+      licenses.yaml) using the CycloneDX SBOM's license data each run; disallowed licenses fail the
+      build, "review-required" licenses are flagged to the POA&M, and the license report is part of
+      the BoE. This supports component-usage compliance and the RAISE Gate 2 component analysis.
+    evidence:
+      - { gate: license }
+      - { artifact: "license/**" }
+    assessment:
+      methods: [Examine]
+      objective: "Software is used in accordance with contract/license terms; usage is tracked and controlled."
+    raise_gate: [2]
+    ssdf: [PW.4]
+
+  - id: CM-11
+    family: CM
+    title: User-Installed Software
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-001807]
+    narrative: >
+      Build agents are ephemeral GitHub-hosted (or controlled self-hosted) runners; only declared,
+      pinned dependencies from the approved package sources are installed during the build; runtime
+      images are immutable and run read-only. Developer-endpoint software policy is a program/common
+      control. Conftest/OPA flags `ADD <url>` and unpinned packages.
+    evidence:
+      - { gate: iac }
+      - { gate: container }
+    assessment:
+      methods: [Examine]
+      objective: "Policies govern user-installed software; enforcement and monitoring are in place."
+    raise_gate: []
+    ssdf: [PO.5, PW.4]
+
+  # --------------------------------------------------------------------------- CP — Contingency Planning
+  - id: CP-9
+    family: CP
+    title: System Backup
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "Hosting platform / RPOC / CSP — see the Customer Responsibility Matrix"
+    ccis: [CCI-000535, CCI-000537]
+    narrative: >
+      Source code, IaC, the compliance content, and every release artifact (signed images, SBOMs,
+      attestations, the eMASS package, the consolidated evidence set) are retained — in this Git
+      repository, in the OCI registry, as GitHub Release assets, and (optionally) in the immutable
+      versioned artifact bucket defined in deploy/terraform. Data backups and infrastructure
+      restoration are provided by the platform/CSP (inherited). Restore testing is documented per
+      the contingency plan.
+    evidence:
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Backups of system-level and user-level information are conducted at the defined frequency; backups are protected; restoration is tested."
+    raise_gate: []
+    ssdf: [PS.3]
+
+  # --------------------------------------------------------------------------- IA — Identification & Authentication
+  - id: IA-2
+    family: IA
+    title: Identification and Authentication (Organizational Users)
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "Enterprise IdP / DoD PKI / platform — see the Customer Responsibility Matrix"
+    ccis: [CCI-000764, CCI-000765]
+    narrative: >
+      Developers and operators authenticate to GitHub (and the platform) via the enterprise IdP /
+      DoD PKI with MFA enforced; CI/CD jobs authenticate to the registry and cloud via short-lived
+      OIDC-issued tokens (no long-lived credentials). End-user authentication to the application is
+      provided per the application's design / the platform's identity service (document here).
+    evidence:
+      - { gate: supply-chain }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Organizational users are uniquely identified and authenticated (incl. MFA) before access is granted."
+    raise_gate: []
+    ssdf: [PO.5]
+
+  - id: IA-5
+    family: IA
+    title: Authenticator Management
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: hybrid
+    ccis: [CCI-000196, CCI-000201]
+    narrative: >
+      No secrets are committed to the repository: every commit/PR is scanned by Gitleaks and
+      TruffleHog, GitHub secret scanning + push protection is enabled, Trivy and Semgrep add
+      defense-in-depth secret detection, and any verified/high-confidence detection fails the build.
+      Runtime secrets are sourced from the platform's secrets manager / GitHub Actions secrets (not
+      from code); Dependabot and short-lived OIDC tokens reduce long-lived credentials. Allow-listed
+      historical detections in policy/gitleaks/.gitleaks.toml carry a justification + rotation date.
+    evidence:
+      - { gate: secrets }
+      - { artifact: "secrets/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Authenticators are managed: no embedded/static credentials; storage and protection requirements are met; rotation/revocation is performed."
+    raise_gate: [3]
+    ssdf: [PS.1]
+
+  # --------------------------------------------------------------------------- IR — Incident Response
+  - id: IR-4
+    family: IR
+    title: Incident Handling
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "Platform CSSP / RPOC SOC — see the Customer Responsibility Matrix"
+    ccis: [CCI-000808]
+    narrative: >
+      An incident-handling capability (preparation, detection/analysis, containment, eradication,
+      recovery, post-incident) is provided in coordination with the platform/RPOC CSSP/SOC; the
+      application team supports triage and remediation, and root-cause findings feed back into the
+      SDLC (SSDF RV.3). For RAISE, an application whose production workload has an unremediated
+      High+ finding past the 21-day window is isolated/removed pending AO exception. (This control,
+      with AU-6/SI-4 and CSSP coordination, supports the cATO "active cyber defense" pillar.)
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Reference the IRP and the platform CSSP/SOC agreements." }
+    assessment:
+      methods: [Examine, Interview, Test]
+      objective: "An incident-handling capability is implemented, exercised, and integrated with contingency planning and the CSSP."
+    raise_gate: []
+    ssdf: [RV.2, RV.3]
+
+  - id: IR-6
+    family: IR
+    title: Incident Reporting
+    baseline: [low, moderate, high]
+    implementation_status: planned
+    responsibility: hybrid
+    ccis: [CCI-000832]
+    narrative: >
+      (PROGRAM/PLATFORM TO COMPLETE) Incidents are reported to the required internal and external
+      parties (ISSM/AO, CSSP, JFHQ-DODIN/US-CERT as applicable) within the required timeframes.
+      Reference the reporting procedures and integrations (e.g., automated notifications) here.
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)" }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "Incidents are reported to designated authorities within required timeframes."
+    raise_gate: []
+    ssdf: [RV.1]
+
+  # --------------------------------------------------------------------------- PL — Planning
+  - id: PL-2
+    family: PL
+    title: System Security and Privacy Plan
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-000563, CCI-002681]
+    narrative: >
+      The System Security Plan (compliance/ssp/system-security-plan.md) documents the system
+      description, authorization boundary, categorization, the selected controls and their
+      implementation, inherited/common controls (the Customer Responsibility Matrix), and the
+      ConMon strategy. Control implementation status/narratives are kept current automatically from
+      this catalog and the pipeline evidence (controls.json), and the SSP is included in the eMASS
+      submission package each release.
+    evidence:
+      - { gate: body-of-evidence }
+      - { artifact: "emass-package/system-security-plan.md" }
+      - { artifact: "boe/controls.json" }
+    assessment:
+      methods: [Examine]
+      objective: "A security plan is developed, documented, reviewed, approved, and updated; it describes the system, boundary, environment, controls, and connections."
+    raise_gate: []
+    ssdf: [PO.1, PW.1]
+
+  - id: PL-8
+    family: PL
+    title: Security and Privacy Architectures
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-002853]
+    narrative: >
+      The system's security architecture (defense-in-depth, segmentation, data flows, trust
+      boundaries) is described in the SSP and docs/architecture.md and represented as code (the
+      Dockerfile, deploy/k8s NetworkPolicies and Pod Security, deploy/terraform). Architecture
+      changes go through CM-3/CM-4.
+    evidence:
+      - { gate: iac }
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Evidence: SSP architecture section + docs/architecture.md + IaC; review for completeness." }
+    assessment:
+      methods: [Examine]
+      objective: "A security architecture is developed that describes the philosophy/requirements/approach and is integrated into the SDLC and the enterprise architecture."
+    raise_gate: []
+    ssdf: [PW.1, SA.8]
+
+  # --------------------------------------------------------------------------- PM — Program Management
+  - id: PM-9
+    family: PM
+    title: Risk Management Strategy
+    baseline: [common]
+    implementation_status: planned
+    responsibility: common
+    ccis: [CCI-002993]
+    narrative: >
+      (ORGANIZATION-LEVEL) An organization-wide risk management strategy (risk tolerance, framing,
+      assessment, response, monitoring) is established and provides the acceptable-residual-risk
+      tolerances the AO and RPOC ISSM use (the cATO Implementation Guide calls this the "risk
+      governance process"). Reference the organization's risk strategy here.
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)" }
+    assessment:
+      methods: [Examine]
+      objective: "An organization-wide risk management strategy is developed and implemented; risk tolerance is defined."
+    raise_gate: []
+    ssdf: [PO.1]
+
+  # --------------------------------------------------------------------------- RA — Risk Assessment
+  - id: RA-3
+    family: RA
+    title: Risk Assessment
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-000379, CCI-001048]
+    narrative: >
+      Risk is assessed and documented: threat modeling and design review at PW.1/PW.2 (architecture
+      docs), automated risk inputs from every scanner rolled into severity-rated findings and a
+      control-status roll-up each run, and the POA&M capturing residual risk (threat/likelihood/
+      impact/residual-risk-level per item). The risk assessment is updated whenever the system, the
+      threat environment, or the findings change materially.
+    evidence:
+      - { gate: body-of-evidence }
+      - { artifact: "boe/poam.json" }
+      - { artifact: "findings.json" }
+    assessment:
+      methods: [Examine]
+      objective: "Risk assessments are conducted and documented at the defined frequency and on significant changes; results inform control selection and risk responses."
+    raise_gate: []
+    ssdf: [PW.1, RV.2]
+
+  - id: RA-5
+    family: RA
+    title: Vulnerability Monitoring and Scanning
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-001054, CCI-001643, CCI-002906]
+    narrative: >
+      The system is scanned for vulnerabilities on every push/PR, daily, and on demand: SCA of
+      dependencies (Trivy fs, Grype, OWASP Dependency-Check), container image scanning (Trivy,
+      Grype), DAST (OWASP ZAP), STIG/SCAP evaluation (OpenSCAP), SAST (CodeQL, Semgrep), IaC
+      scanning, and secrets scanning. Findings are severity-rated against CVSS, deduplicated,
+      reported in GitHub code scanning, gated per policy/thresholds.yaml, and tracked to closure in
+      the POA&M with remediation SLAs (RAISE: High+ in production = 21 days). Suppressions require a
+      documented justification + review date and remain visible. Scanner vulnerability databases are
+      kept current (or mirrored internally for IL4/IL5).
+    evidence:
+      - { gate: sca }
+      - { gate: container }
+      - { gate: dast }
+      - { gate: stig }
+      - { artifact: "sca/**" }
+      - { artifact: "container/**" }
+      - { artifact: "dast/**" }
+    assessment:
+      methods: [Test, Examine]
+      objective: "The system is scanned for vulnerabilities at the defined frequency and when new vulnerabilities are identified; legitimate vulnerabilities are remediated within defined response times; information is shared with relevant parties."
+    raise_gate: [2, 4, 5]
+    ssdf: [RV.1, PW.4]
+
+  # --------------------------------------------------------------------------- SA — System & Services Acquisition
+  - id: SA-3
+    family: SA
+    title: System Development Life Cycle
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000601]
+    narrative: >
+      The system is managed using a defined, secure SDLC that integrates security at every phase —
+      the DoD DevSecOps lifecycle (Plan/Develop/Build/Test/Release/Deliver/Deploy/Operate/Monitor/
+      Feedback) implemented as this GitHub-native pipeline, mapped to NIST SSDF practices (see
+      crosswalks/ssdf-800-218-crosswalk.md and devsecops-reference-design-crosswalk.md). Roles and
+      responsibilities are defined (compliance/roles-and-responsibilities.md).
+    evidence:
+      - { gate: build-test }
+      - { gate: body-of-evidence }
+    assessment:
+      methods: [Examine, Interview]
+      objective: "A system development life cycle is defined and used that incorporates information-security considerations; roles/responsibilities are defined."
+    raise_gate: []
+    ssdf: [PO.1, PO.2, PO.3]
+
+  - id: SA-8
+    family: SA
+    title: Security and Privacy Engineering Principles
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-000605]
+    narrative: >
+      Sound security engineering principles are applied: least privilege, least functionality,
+      defense in depth, secure defaults, minimal attack surface, fail-secure, separation of duties —
+      reflected in the hardened container, the "restricted" Kubernetes profile, default-deny
+      networking, secure-by-default IaC, and the secure-coding rules enforced by SAST. Design
+      decisions are recorded (architecture docs / PW.1).
+    evidence:
+      - { gate: sast }
+      - { gate: iac }
+      - { gate: container }
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Evidence: architecture/design docs + the secure-by-default code/IaC; review for principle coverage." }
+    assessment:
+      methods: [Examine]
+      objective: "Security and privacy engineering principles are applied in the specification, design, development, implementation, and modification of the system."
+    raise_gate: []
+    ssdf: [PW.1]
+
+  - id: SA-10
+    family: SA
+    title: Developer Configuration Management
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-000692, CCI-003170]
+    narrative: >
+      The developer performs configuration management on code, build, and releases: Git version
+      control with branch protection and signed commits, signed/tagged releases, immutable build
+      manifests, a CHANGELOG/release-notes record of every production change (RAISE App-Owner
+      artifact), reproducible multi-stage builds, signed container images with SLSA build provenance
+      attestations, and flaw tracking integrated (Dependabot + the POA&M). Integrity of the build
+      and release artifacts is verifiable (cosign/Sigstore + Rekor transparency log).
+    evidence:
+      - { gate: container }
+      - { gate: review }
+      - { artifact: "container/**" }
+      - { artifact: "provenance/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "The developer performs CM during development/operation, documents/manages changes, tracks security flaws, and provides integrity verification for releases."
+    raise_gate: [7, 8]
+    ssdf: [PS.1, PS.2, PS.3, PW.6]
+
+  - id: SA-11
+    family: SA
+    title: Developer Testing and Evaluation
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-003173, CCI-003174, CCI-003175]
+    narrative: >
+      The developer conducts security testing/evaluation throughout: unit tests + coverage (build
+      gate); static code analysis — SA-11(1) — via CodeQL and Semgrep with custom DoD secure-coding
+      rules; threat/vulnerability analysis — SA-11(2) — via SCA/SBOM and the risk roll-up; manual
+      code review — SA-11(4) — via required Code Owner PR review; dynamic/fuzz analysis — SA-11(8)
+      — via OWASP ZAP; penetration testing — SA-11(5) — at the AO-defined frequency. Findings are
+      remediated or tracked in the POA&M; remediation is independently verified on the next pipeline
+      run (and, for RAISE High+ items, by the Qualified Validator / Independent Assessor).
+    evidence:
+      - { gate: sast }
+      - { gate: dast }
+      - { gate: sca }
+      - { gate: container }
+      - { gate: build-test }
+      - { artifact: "sast/**" }
+      - { artifact: "dast/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "The developer creates and implements a security assessment plan; performs static analysis, dynamic analysis, and other testing/evaluation as required; produces evidence; corrects flaws."
+    raise_gate: [1, 5]
+    ssdf: [PW.7, PW.8, PW.2]
+
+  - id: SA-15
+    family: SA
+    title: Development Process, Standards, and Tools
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-003193, CCI-003202]
+    narrative: >
+      A documented, repeatable development process is followed using an explicit, version-controlled
+      toolchain: the CI/CD workflows, the SAST/SCA/SBOM/secrets/IaC/container/DAST/STIG/license
+      tools, the policy-as-code, and the documented secure-coding standard (policy/semgrep/dod-
+      secure-coding.yml). Tool configurations and the process itself are reviewed/updated; the
+      OpenSSF Scorecard provides automated process/hygiene metrics; SA-15(3) criticality analysis
+      and SA-15(7) automated vulnerability analysis are performed by the pipeline.
+    evidence:
+      - { gate: sast }
+      - { gate: iac }
+      - { gate: supply-chain }
+      - { gate: body-of-evidence }
+      - { artifact: "scorecard/**" }
+    assessment:
+      methods: [Examine]
+      objective: "The developer follows a documented development process that addresses security, defines/maintains standards and tools, documents tool options/configurations, and reviews the process periodically."
+    raise_gate: [1, 2, 3, 4, 5]
+    ssdf: [PO.3, PO.4, PW.7]
+
+  - id: SA-22
+    family: SA
+    title: Unsupported System Components
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: system
+    ccis: [CCI-003376]
+    narrative: >
+      Unsupported/end-of-life components are identified and replaced: the SBOM + SCA tooling and
+      Dependabot surface outdated and EOL dependencies and base images; replacement (or documented
+      extended-support arrangements / compensating controls + a POA&M item) is required. The
+      container base image is updated on a regular cadence (Dependabot docker ecosystem).
+    evidence:
+      - { gate: sca }
+      - { gate: sbom }
+      - { artifact: "sbom/**" }
+    assessment:
+      methods: [Examine]
+      objective: "Unsupported components are replaced, or — when replacement is not feasible — extended support or compensating controls are in place and documented."
+    raise_gate: [2]
+    ssdf: [PW.4, RV.1]
+
+  # --------------------------------------------------------------------------- SC — System & Communications Protection
+  - id: SC-7
+    family: SC
+    title: Boundary Protection
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "Platform/CSP perimeter (CAP/BCAP, WAF, cloud firewalls) — see the Customer Responsibility Matrix"
+    ccis: [CCI-001097, CCI-002397]
+    narrative: >
+      Communications at the system boundary are controlled and monitored: Kubernetes NetworkPolicy
+      provides default-deny with explicit allows for the application; only the required ingress port
+      is exposed (registered in PPSM); security-group/firewall rules in IaC restrict ingress/egress
+      and are scanned (Checkov/KICS/Conftest forbid 0.0.0.0/0 to sensitive ports). The enterprise/
+      platform perimeter (cloud access points, WAF, IDS/IPS) is inherited/common.
+    evidence:
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Communications at external and key internal boundaries are monitored and controlled; the system connects to external networks only through managed interfaces."
+    raise_gate: []
+    ssdf: [PW.9]
+
+  - id: SC-8
+    family: SC
+    title: Transmission Confidentiality and Integrity
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-002418, CCI-002421]
+    narrative: >
+      Data in transit is protected with TLS 1.2+ (ingress termination at the platform; service-mesh
+      mTLS where used); the application sets HSTS-adjacent security headers and refuses to disable
+      certificate verification (enforced by a Semgrep rule and code review); IaC requires HTTPS-only
+      access to storage (Conftest/OPA `aws:SecureTransport=false` deny). FIPS-validated crypto
+      modules are used for security-relevant TLS (SC-13).
+    evidence:
+      - { gate: sast }
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "The confidentiality and integrity of transmitted information is protected (e.g., via approved cryptography)."
+    raise_gate: []
+    ssdf: [PW.9]
+
+  - id: SC-13
+    family: SC
+    title: Cryptographic Protection
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-002450]
+    narrative: >
+      Where cryptography is required for security, FIPS-validated (CMVP) modules are used (the
+      platform's TLS terminators / KMS; the runtime's crypto libraries). Weak algorithms (MD5,
+      SHA-1) are flagged by SAST; signing uses Sigstore/cosign (and, where required, organization-
+      managed keys backed by an HSM/KMS). Document the specific CMVP-validated modules and their
+      certificate numbers here.
+    evidence:
+      - { gate: sast }
+      - { artifact: "sast/**" }
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)", comments: "Provide the CMVP module list / certificate numbers." }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Cryptographic uses are implemented with organization-approved (FIPS-validated/NSA-approved as applicable) cryptography."
+    raise_gate: []
+    ssdf: [PW.9]
+
+  - id: SC-28
+    family: SC
+    title: Protection of Information at Rest
+    baseline: [moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "CSP storage encryption / KMS — see the Customer Responsibility Matrix"
+    ccis: [CCI-002472]
+    narrative: >
+      Information at rest is encrypted: storage buckets/volumes/databases are configured for SSE-KMS
+      (FIPS-validated CMK), enforced and scanned in IaC (Checkov/KICS/Conftest require encryption);
+      secrets at rest are in the platform's secrets manager (encrypted). The container runs read-
+      only with no persistent local storage. CSP-managed encryption-at-rest is inherited.
+    evidence:
+      - { gate: iac }
+      - { artifact: "iac/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Information at rest is protected (e.g., via cryptographic mechanisms) for the defined information/components."
+    raise_gate: []
+    ssdf: [PW.9]
+
+  # --------------------------------------------------------------------------- SI — System & Information Integrity
+  - id: SI-2
+    family: SI
+    title: Flaw Remediation
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-002605, CCI-001233]
+    narrative: >
+      Flaws are identified, reported, and corrected on an ongoing basis: SCA + container scanning +
+      SAST + DAST + STIG/SCAP find flaws each run; Dependabot opens patch PRs daily; remediation is
+      tracked in the POA&M with SLAs (RAISE: raw High+ in production remediated/mitigated within 21
+      calendar days, else the workload is isolated/removed pending an AO exception); remediation is
+      verified on the next pipeline run. Mean-time-to-patch is reported in the ConMon trend (a cATO
+      continuous-authorization metric).
+    evidence:
+      - { gate: sca }
+      - { gate: container }
+      - { gate: body-of-evidence }
+      - { artifact: "sca/**" }
+      - { artifact: "boe/poam.json" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "System flaws are identified, reported, and corrected; updates are installed within defined timeframes; flaw remediation is incorporated into configuration management."
+    raise_gate: [2, 4]
+    ssdf: [RV.1, RV.2]
+
+  - id: SI-3
+    family: SI
+    title: Malicious Code Protection
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    ccis: [CCI-001239, CCI-001242]
+    narrative: >
+      Defenses against malicious/unauthorized code: secrets/keys detection (Gitleaks, TruffleHog,
+      Trivy, push protection) prevents credential exfiltration vectors; image scanning detects known-
+      malicious/vulnerable content; only signed, pipeline-built images are deployable (admission
+      control rejects unsigned/untrusted artifacts); dependency provenance/integrity is checked;
+      branch protection + signed commits + Code Owner review prevent unauthorized code introduction.
+      Host/runtime anti-malware/EDR is provided by the platform (inherited).
+    evidence:
+      - { gate: secrets }
+      - { gate: container }
+      - { gate: sca }
+      - { artifact: "secrets/**" }
+      - { artifact: "container/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Malicious code protection mechanisms are employed at entry/exit points and at endpoints; they are kept current; detections are handled."
+    raise_gate: [3, 4]
+    ssdf: [PS.1, PW.4]
+
+  - id: SI-4
+    family: SI
+    title: System Monitoring
+    baseline: [low, moderate, high]
+    implementation_status: hybrid
+    responsibility: hybrid
+    inherited_from: "Platform/RPOC monitoring + CSSP — see the Customer Responsibility Matrix"
+    ccis: [CCI-001253, CCI-002645]
+    narrative: >
+      The system is monitored for attacks and indicators of compromise: application/CI/CD/registry
+      telemetry is shipped to the platform's monitoring/SIEM; the build system is monitored
+      (workflow run logs, OpenSSF Scorecard "Dangerous-Workflow"/"Token-Permissions" checks);
+      runtime intrusion detection, network monitoring, and threat hunting are provided by the
+      platform/RPOC in coordination with the CSSP (inherited/common) — this also supports the cATO
+      "active cyber defense" pillar.
+    evidence:
+      - { gate: supply-chain }
+      - { artifact: "scorecard/**" }
+    assessment:
+      methods: [Examine, Test, Interview]
+      objective: "The system is monitored to detect attacks/indicators; monitoring information is analyzed and acted upon; intrusion-detection tools are employed."
+    raise_gate: []
+    ssdf: [RV.1]
+
+  - id: SI-7
+    family: SI
+    title: Software, Firmware, and Information Integrity
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-002696, CCI-002710]
+    narrative: >
+      Unauthorized changes to software/artifacts are detected and prevented: container images are
+      signed (cosign/Sigstore, recorded in the Rekor transparency log) and accompanied by SLSA build
+      provenance attestations; deployments require signature verification (admission control); Git
+      commits are signed; release artifacts carry integrity hashes; IaC drift is detectable; the
+      runtime root filesystem is read-only. Integrity-verification information is made available to
+      consumers (SSDF PS.2).
+    evidence:
+      - { gate: container }
+      - { gate: sast }
+      - { artifact: "container/**" }
+      - { artifact: "provenance/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Integrity-verification tools are employed to detect unauthorized changes to software/firmware/information; responses to integrity violations are defined."
+    raise_gate: [7]
+    ssdf: [PS.2, PS.3, PW.6]
+
+  # --------------------------------------------------------------------------- SR — Supply Chain Risk Management
+  - id: SR-2
+    family: SR
+    title: Supply Chain Risk Management Plan
+    baseline: [moderate, high]
+    implementation_status: planned
+    responsibility: system
+    ccis: [CCI-Pending]
+    narrative: >
+      (PROGRAM TO COMPLETE) A C-SCRM plan for the system is developed and maintained (per NIST SP
+      800-161 Rev 1), addressing development, acquisition, and operations supply-chain risks; the
+      pipeline controls below (SR-3/SR-4/SR-11, plus SBOM/provenance/signing) are the implementing
+      mechanisms — cross-reference them in the plan. Reference the C-SCRM plan here.
+    evidence: []
+    manual_assessment: { result: "Not Reviewed (Manual Assessment)" }
+    assessment:
+      methods: [Examine]
+      objective: "A supply-chain risk management plan is developed, maintained, and protected; it addresses risks across the SDLC and is consistent with the risk management strategy."
+    raise_gate: []
+    ssdf: [PO.1]
+
+  - id: SR-3
+    family: SR
+    title: Supply Chain Controls and Processes
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-Pending]
+    narrative: >
+      Processes are in place to identify and reduce supply-chain risk: dependencies are pinned and
+      pulled from approved sources; the SBOM (SPDX + CycloneDX) is generated for source and image
+      each run; SCA + license policy gate every component; build provenance is generated (SLSA) and
+      images are signed; base images are recommended from DoD-hardened sources (Iron Bank/Repo One)
+      so the hardening + control evidence is inherited; OpenSSF Scorecard measures repo/supply-chain
+      hygiene (pinned dependencies, signed releases, dangerous workflows, token permissions). Aligns
+      with NIST SP 800-161r1 / SP 800-204D and the CISA/NSA/ODNI software-supply-chain practices.
+    evidence:
+      - { gate: sca }
+      - { gate: sbom }
+      - { gate: container }
+      - { gate: supply-chain }
+      - { artifact: "sbom/**" }
+      - { artifact: "scorecard/**" }
+      - { artifact: "provenance/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Controls and processes are established to protect against supply-chain risks (e.g., for components, build, and operations) and to limit harm from supply-chain compromise."
+    raise_gate: [2, 7, 8]
+    ssdf: [PW.4, PS.3, PO.3]
+
+  - id: SR-4
+    family: SR
+    title: Provenance
+    baseline: [moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-Pending]
+    narrative: >
+      Provenance is documented and maintained for the system's software and components: the SBOM
+      records component origin/version/identifiers and is itself timestamped/authored (NTIA minimum
+      elements); the build emits a signed SLSA build-provenance attestation (in-toto, via
+      actions/attest-build-provenance) describing the builder, source commit, and inputs, pushed to
+      the registry alongside the image and recorded in the Sigstore transparency log; Git history +
+      signed tags provide source provenance. (SSDF PS.3.2.)
+    evidence:
+      - { gate: container }
+      - { gate: sbom }
+      - { artifact: "provenance/**" }
+      - { artifact: "sbom/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Provenance of systems, system components, and associated data is documented, monitored, and maintained; changes to provenance are tracked."
+    raise_gate: [7]
+    ssdf: [PS.3]
+
+  - id: SR-11
+    family: SR
+    title: Component Authenticity
+    baseline: [low, moderate, high]
+    implementation_status: implemented
+    responsibility: system
+    ccis: [CCI-Pending]
+    narrative: >
+      Component authenticity is established and verified: container images are cryptographically
+      signed and signatures are verified before deployment (admission control); base/dependency
+      artifacts come from authenticated, approved sources with integrity verification; the SBOM is
+      the authoritative component inventory backing authenticity checks; unsigned or unverifiable
+      artifacts are rejected (RAISE: only signed release containers may be deployed; admission
+      control enforced by the RPOC). Anti-counterfeit awareness is part of role-based training (with
+      AC-6/CM-5 limiting who can introduce components).
+    evidence:
+      - { gate: container }
+      - { gate: sbom }
+      - { artifact: "container/**" }
+    assessment:
+      methods: [Examine, Test]
+      objective: "Anti-counterfeit policy/procedures are in place; component authenticity is verified; counterfeit/suspect components are reported and handled."
+    raise_gate: [7, 8]
+    ssdf: [PS.2, PW.4]

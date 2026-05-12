@@ -1,0 +1,44 @@
+name: "ATO / cATO / RAISE milestone"
+description: "Track a milestone on the path to (or maintenance of) an ATO, cATO, or RAISE incorporation."
+title: "[ATO] <milestone>"
+labels: ["ato-milestone"]
+projects: []
+body:
+  - type: dropdown
+    id: track
+    attributes:
+      label: "Authorization track"
+      options:
+        - "Traditional ATO (RMF Authorize step)"
+        - "Continuous ATO (cATO) — DoD CISO"
+        - "RAISE 2.0 incorporation into an RPOC's ATO"
+        - "RPOC designation (platform)"
+        - "Annual review / re-authorization"
+        - "Quarterly review (RAISE)"
+    validations: { required: true }
+  - type: dropdown
+    id: rmf_step
+    attributes:
+      label: "Related RMF step"
+      options: ["Prepare", "Categorize", "Select", "Implement", "Assess", "Authorize", "Monitor"]
+  - type: textarea
+    id: scope
+    attributes: { label: "What this milestone covers / definition of done" }
+    validations: { required: true }
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: "Body-of-Evidence artifacts required for this milestone"
+      placeholder: |
+        - SSP updated
+        - SAR signed by SCA
+        - POA&M current; no open CAT I past SLA
+        - eMASS package built (link to Release)
+        - Dashboard reflects current posture
+  - type: input
+    id: owner
+    attributes: { label: "Owner" }
+    validations: { required: true }
+  - type: input
+    id: target
+    attributes: { label: "Target date (YYYY-MM-DD)" }

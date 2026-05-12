@@ -1,0 +1,47 @@
+# Dependabot — continuous dependency & GitHub Actions update monitoring.
+# RMF/SSDF evidence: SI-2 (flaw remediation), SA-22 (unsupported components), RA-5, SR-3,
+# SSDF RV.1 (identify vulnerabilities on an ongoing basis) / PW.4 (use well-secured components).
+# Dependabot security updates + the dependency graph should also be enabled in repo settings.
+
+version: 2
+updates:
+  # --- Python application dependencies ---
+  - package-ecosystem: "pip"
+    directory: "/sample-app"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels: ["dependencies", "ecosystem:pip"]
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  # --- Tooling / evidence-engine dependencies ---
+  - package-ecosystem: "pip"
+    directory: "/scripts"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ecosystem:pip", "area:tooling"]
+
+  # --- GitHub Actions (pin/upgrade the pipeline itself) ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ecosystem:github-actions", "area:pipeline"]
+    commit-message:
+      prefix: "ci"
+
+  # --- Container base image ---
+  - package-ecosystem: "docker"
+    directory: "/sample-app"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ecosystem:docker"]
+
+  # --- Terraform providers/modules (example IaC) ---
+  - package-ecosystem: "terraform"
+    directory: "/deploy/terraform"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ecosystem:terraform", "area:iac"]

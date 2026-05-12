@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: dsop-sample
+  labels:
+    app.kubernetes.io/name: sample-app
+    app.kubernetes.io/part-of: dsop-reference-system
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sample-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sample-app
+    spec:
+      automountServiceAccountToken: false
+      # Pod-level security context (CM-6 / AC-6 / SI-7).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          # Pin to a digest in production (the pipeline pushes ghcr.io/<org>/<repo>/sample-app:sha-<...>
+          # and signs it; admission control should require a valid Sigstore signature — RAISE Gate 7).
+          image: ghcr.io/your-org/your-repo/sample-app:sha-REPLACE
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          env:
+            - name: APP_DEBUG
+              value: ""        # never enable debug in deployed configs (CM-6 / SI-11)
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app
+  namespace: dsop-sample
+  labels:
+    app.kubernetes.io/name: sample-app
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sample-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

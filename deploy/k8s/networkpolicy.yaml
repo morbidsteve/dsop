@@ -1,0 +1,52 @@
+# Default-deny for the namespace, plus a narrow allow for the app (SC-7 boundary protection;
+# CM-7 least functionality). Adjust the ingress source to your actual ingress controller / mesh.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: dsop-sample
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  # Deny everything by default; explicit allows below.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-ingress
+  namespace: dsop-sample
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sample-app
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-system   # your ingress controller's namespace
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-dns
+  namespace: dsop-sample
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sample-app
+  policyTypes: [Egress]
+  egress:
+    # DNS only by default; add explicit egress rules for any backends this workload calls.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

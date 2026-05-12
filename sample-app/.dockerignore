@@ -1,0 +1,15 @@
+# Keep the build context minimal (smaller context, fewer secrets risk).
+tests/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.md
+.git
+.github
+requirements-dev.txt
+pyproject.toml
+pytest.ini

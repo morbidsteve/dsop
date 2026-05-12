@@ -1,0 +1,68 @@
+# ATO Status Report — scheduled continuous-monitoring snapshot + auto-updated "ATO Status" issue.
+#
+# Evidence for: CA-7 (Continuous Monitoring), cATO Pillar 1 (continuous monitoring of RMF controls),
+# RAISE 2.0 ConMon expectations + quarterly-review preparation. This keeps a GitHub-native,
+# always-current status view in addition to the GitHub Pages dashboard.
+#
+# It re-reads the latest Body of Evidence artifact (or the committed site/data snapshot) and:
+#   - appends a dated ConMon record,
+#   - updates a single pinned issue labeled `ato-status` with the current posture,
+#   - (optionally) opens/updates POA&M tracking issues for new findings above threshold.
+
+name: ato-status-report
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"     # weekly Monday status refresh
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["devsecops-pipeline"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Refresh ATO Status issue + ConMon snapshot
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r scripts/requirements.txt
+      - name: Pull latest Body of Evidence artifact (if any)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({owner: context.repo.owner, repo: context.repo.repo, name: 'body-of-evidence', per_page: 1});
+            if (arts.data.artifacts.length === 0) { core.info('No body-of-evidence artifact yet; using committed site/data.'); return; }
+            const a = arts.data.artifacts[0];
+            const dl = await github.rest.actions.downloadArtifact({owner: context.repo.owner, repo: context.repo.repo, artifact_id: a.id, archive_format: 'zip'});
+            const fs = require('fs'); fs.writeFileSync('boe.zip', Buffer.from(dl.data));
+      - name: Unpack (if downloaded)
+        run: '[ -f boe.zip ] && (mkdir -p evidence && unzip -o boe.zip -d evidence) || true'
+      - name: Render the ATO Status report (Markdown)
+        run: python scripts/build_dashboard_data.py --status-issue-md --evidence evidence --site site --out ato-status.md
+      - name: Create or update the pinned "ATO Status" issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('ato-status.md', 'utf8');
+            const label = 'ato-status';
+            // Ensure label exists
+            try { await github.rest.issues.getLabel({owner: context.repo.owner, repo: context.repo.repo, name: label}); }
+            catch { await github.rest.issues.createLabel({owner: context.repo.owner, repo: context.repo.repo, name: label, color: '0e8a16', description: 'Auto-maintained ATO/cATO status'}); }
+            const found = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, labels: label, state: 'open'});
+            const title = 'ATO / cATO Status — Body of Evidence summary';
+            if (found.data.length > 0) {
+              await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: found.data[0].number, title, body});
+            } else {
+              const issue = await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: [label]});
+              try { await github.graphql(`mutation($id:ID!){ pinIssue(input:{issueId:$id}){ issue { number } } }`, {id: issue.data.node_id}); } catch (e) { core.info('Could not pin issue: ' + e.message); }
+            }

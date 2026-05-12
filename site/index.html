@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DSOP — RMF / cATO / RAISE 2.0 Body of Evidence</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo">⛬</span>
+    <div>
+      <h1 id="sys-name">DSOP — Body of Evidence</h1>
+      <div class="sub" id="sys-sub">DevSecOps pipeline · RMF / cATO / Navy RAISE 2.0 · eMASS-ready evidence</div>
+    </div>
+  </div>
+  <div class="meta-right">
+    <div id="auth-status" class="badge badge-neutral">authorization: —</div>
+    <div class="muted" id="gen-time">generated: —</div>
+    <div class="muted" id="commit-line"></div>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="status" class="active">Status</button>
+  <button data-tab="controls">Controls</button>
+  <button data-tab="findings">Findings</button>
+  <button data-tab="poam">POA&amp;M</button>
+  <button data-tab="conmon">ConMon</button>
+  <button data-tab="pipeline">Pipeline &amp; Gates</button>
+  <button data-tab="package">eMASS Package</button>
+</nav>
+
+<main>
+  <!-- STATUS ------------------------------------------------------------------>
+  <section id="tab-status" class="tab active">
+    <div class="cards" id="status-cards"></div>
+    <div class="two-col">
+      <div class="panel">
+        <h3>Controls by family</h3>
+        <div id="family-bars"></div>
+      </div>
+      <div class="panel">
+        <h3>RAISE 2.0 Security Gates (this run)</h3>
+        <div id="raise-gates"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>What this is</h3>
+      <p class="muted">This dashboard is published by the DevSecOps pipeline on every run. It rolls up the
+      pipeline's security gates (SAST, SCA, SBOM, secrets, IaC, container scan + sign + SLSA provenance, DAST,
+      STIG/SCAP, license, supply-chain) into a NIST SP 800-53 control posture, a POA&amp;M (eMASS layout), a
+      continuous-monitoring trend, and an eMASS submission package. <strong>The automated control test results are a
+      first pass — the Security Control Assessor makes the final determination and signs the SAR; the Authorizing
+      Official (and, for cATO, the DoD CISO; for RAISE, the RPOC ISSM/AO) renders the authorization decision.</strong>
+      See <code>docs/ao-quickstart.md</code> and <code>compliance/crosswalks/</code> in the repo.</p>
+      <p class="muted">⚠️ This is a reference/template implementation. Confirm every mapping against the controlling
+      documents — several authoritative sources (RMF Knowledge Service, eMASS User Guide &amp; POA&amp;M template,
+      RAISE RIG annexes, DoD overlays) are CAC-restricted and may be newer than the public versions this is built from
+      (<code>compliance/references.md</code>).</p>
+    </div>
+  </section>
+
+  <!-- CONTROLS ---------------------------------------------------------------->
+  <section id="tab-controls" class="tab">
+    <div class="filters">
+      <input type="search" id="ctl-search" placeholder="search control id / title / narrative…" />
+      <select id="ctl-family"><option value="">all families</option></select>
+      <select id="ctl-result">
+        <option value="">all test results</option>
+        <option>Compliant</option><option>Non-Compliant</option>
+        <option value="Not Reviewed">Not Reviewed (any)</option><option>Not Applicable</option>
+      </select>
+      <select id="ctl-status"><option value="">all implementation statuses</option></select>
+      <span class="count" id="ctl-count"></span>
+    </div>
+    <div id="controls-list"></div>
+  </section>
+
+  <!-- FINDINGS ---------------------------------------------------------------->
+  <section id="tab-findings" class="tab">
+    <div class="filters">
+      <input type="search" id="fnd-search" placeholder="search title / component / CVE / location…" />
+      <select id="fnd-severity"><option value="">all severities</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+      <select id="fnd-gate"><option value="">all gates</option></select>
+      <select id="fnd-tool"><option value="">all tools</option></select>
+      <span class="count" id="fnd-count"></span>
+    </div>
+    <table class="grid" id="findings-table">
+      <thead><tr><th>Sev</th><th>Gate</th><th>Tool</th><th>Title</th><th>Component / location</th><th>CVE / CWE</th><th>Fix</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- POA&M ------------------------------------------------------------------->
+  <section id="tab-poam" class="tab">
+    <div class="filters">
+      <input type="search" id="pm-search" placeholder="search description / control / source…" />
+      <select id="pm-cat"><option value="">all CAT</option><option>I</option><option>II</option><option>III</option></select>
+      <label class="chk"><input type="checkbox" id="pm-overdue" /> overdue only</label>
+      <label class="chk"><input type="checkbox" id="pm-oos" /> out-of-RAISE-scope only</label>
+      <span class="count" id="pm-count"></span>
+    </div>
+    <p class="muted">eMASS-layout POA&amp;M. Scheduled completion dates are computed from the remediation SLA
+    (<code>policy/thresholds.yaml</code>; default CAT&nbsp;I = 21 calendar days, per the RAISE 2.0 RIG). Confirm the
+    eMASS POA&amp;M import template columns before importing — see <code>compliance/crosswalks/emass-crosswalk.md</code>.</p>
+    <div id="poam-list"></div>
+  </section>
+
+  <!-- CONMON ------------------------------------------------------------------>
+  <section id="tab-conmon" class="tab">
+    <div class="panel">
+      <h3>Continuous monitoring trend</h3>
+      <p class="muted">CA-7 / cATO Pillar 1 / RAISE ConMon. Each pipeline run appends a dated snapshot.</p>
+      <div id="conmon-chart"></div>
+      <table class="grid" id="conmon-table">
+        <thead><tr><th>Date</th><th>Findings C/H/M/L</th><th>Controls Compliant/NC</th><th>Auto-assess %</th><th>POA&amp;M open (overdue)</th><th>POA&amp;M CAT I/II/III</th><th>SBOM components</th><th>Run</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PIPELINE ---------------------------------------------------------------->
+  <section id="tab-pipeline" class="tab">
+    <div class="panel">
+      <h3>DevSecOps pipeline gates → controls → RAISE Security Gates</h3>
+      <p class="muted">Each gate is a job in <code>.github/workflows/devsecops-pipeline.yml</code> (or a standalone
+      workflow). Fail-the-build policy: <code>policy/thresholds.yaml</code>. Details: <code>docs/pipeline-gates.md</code>.</p>
+      <table class="grid" id="pipeline-table">
+        <thead><tr><th>Gate</th><th>Phase</th><th>Tools</th><th>RAISE Gate</th><th>Controls evidenced</th><th>Ran?</th><th>Findings</th><th>Fail policy</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PACKAGE ----------------------------------------------------------------->
+  <section id="tab-package" class="tab">
+    <div class="panel">
+      <h3>eMASS submission package</h3>
+      <p>The pipeline assembles an eMASS-ready Body of Evidence on every run (workflow artifact <code>body-of-evidence</code>
+      / <code>emass-package</code>) and attaches <code>emass-package.zip</code> to every version-tag GitHub Release.</p>
+      <p id="pkg-links"></p>
+      <h4>Contents</h4>
+      <ul>
+        <li><code>MANIFEST.json</code> — machine index: every file → control(s)/CCI(s) → eMASS artifact category/type</li>
+        <li><code>ato-package-summary.md</code> — human index + posture snapshot + submission steps</li>
+        <li><code>system-security-plan.md</code> — the SSP (PL-2)</li>
+        <li><code>controls.json</code> / <code>controls.csv</code> — per-control implementation status, responsibility, CCIs, narrative</li>
+        <li><code>test-results.csv</code> — control test results + rationale + assessing run</li>
+        <li><code>poam.csv</code> — POA&amp;M in the eMASS column layout</li>
+        <li><code>hardware-software-list.csv</code> — software baseline from the SBOM (HW = template)</li>
+        <li><code>ppsm.csv</code> — Ports/Protocols/Services template</li>
+        <li><code>artifacts/&lt;gate&gt;/…</code> — the raw scan reports, SBOMs, attestations, and the normalized findings</li>
+      </ul>
+      <p class="muted">Runbook: <code>docs/emass-submission-runbook.md</code>.</p>
+    </div>
+    <div class="panel">
+      <h3>Crosswalks (in the repo, under <code>compliance/crosswalks/</code>)</h3>
+      <ul>
+        <li><code>raise-2.0-crosswalk.md</code> — RAISE 2.0 RIG: the 8 Security Gates, the 24 RPOC requirements, the App-Owner artifacts, the quarterly-review deliverables</li>
+        <li><code>cato-evaluation-crosswalk.md</code> — DoD cATO 3 (+1) pillars + Implementation Guide + Evaluation Criteria — and the gaps</li>
+        <li><code>ssdf-800-218-crosswalk.md</code> — NIST SSDF PO/PS/PW/RV (+ the CISA attestation form)</li>
+        <li><code>emass-crosswalk.md</code> — eMASS data areas + POA&amp;M import notes</li>
+        <li><code>devsecops-reference-design-crosswalk.md</code> — DoD Enterprise DevSecOps lifecycle + control gates + Iron Bank</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>DSOP DevSecOps reference pipeline · evidence regenerated on every pipeline run</span>
+  <span class="muted">Not an authorization. Confirm all mappings against the controlling documents (<code>compliance/references.md</code>).</span>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

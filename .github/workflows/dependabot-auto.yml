@@ -1,0 +1,39 @@
+# Triage Dependabot PRs — label by update type and surface security updates.
+# This makes flaw-remediation (SI-2) and unsupported-component replacement (SA-22) visible and
+# auditable in the PR stream; it does NOT auto-merge (change control / CM-3 keeps a human in the loop).
+
+name: dependabot-auto
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  triage:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+      - name: Label the PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const t = '${{ steps.meta.outputs.update-type }}';
+            const eco = '${{ steps.meta.outputs.package-ecosystem }}';
+            const adv = '${{ steps.meta.outputs.ghsa-id }}';
+            const labels = ['dependencies', `ecosystem:${eco}`];
+            if (t) labels.push(t.replace('version-update:semver-','semver:'));
+            if (adv) labels.push('security');
+            for (const l of labels) { try { await github.rest.issues.addLabels({owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, labels: [l]}); } catch (e) {} }
+            if (adv) {
+              await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number,
+                body: `🔐 This update addresses **${adv}**. Per the remediation SLA in \`policy/thresholds.yaml\`, review and merge promptly; the open finding is tracked in the POA&M until merged.`});
+            }

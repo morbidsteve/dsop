@@ -1,0 +1,121 @@
+# ---------------------------------------------------------------------------------------------
+# Quality gates & remediation SLAs — the policy the pipeline enforces.
+#
+# Two distinct things live here:
+#   1. `gates`  — when does a scan FAIL the build (block the merge / release)?
+#   2. `poam`   — when does a finding get written to the POA&M, and what scheduled-completion
+#                 date does it get (the remediation SLA)?
+#
+# Tailor every number to your AO's risk tolerance and your platform's SLA. The defaults below are
+# conservative and align to the Navy RAISE 2.0 RIG (raw "High and above" findings in production
+# remediated/mitigated within 21 calendar days; residual risk must not exceed Moderate; High-risk
+# applications are out of scope of RAISE). DISA CAT severities map roughly: CAT I ≈ High/Critical,
+# CAT II ≈ Medium, CAT III ≈ Low.
+#
+# Referenced by: scripts/evidence_common.py (--gate-*), scripts/generate_poam.py.
+# ---------------------------------------------------------------------------------------------
+
+version: 1
+
+# Global posture: if `enforce: false`, gates report but do not fail the build (use during initial
+# onboarding / baselining, then flip to true once the backlog is in the POA&M).
+enforce: true
+
+# ---- 1. Build-blocking gates -----------------------------------------------------------------
+gates:
+
+  sast:                       # CodeQL + Semgrep
+    fail_on_severity: [critical, high]
+    # Only fail on findings *newly introduced* by this change where the tool supports it
+    # (CodeQL PR analysis, Semgrep diff-aware); pre-existing findings go to the POA&M.
+    new_findings_only: true
+    allow_unfixed: false
+
+  sca:                        # Trivy fs + Grype + OWASP Dependency-Check (dependency vulns)
+    fail_on_severity: [critical]
+    # A High dependency CVE with a fix available also fails; without a fix it goes to the POA&M
+    # (with the SLA window) rather than blocking, unless `block_high_with_fix` is widened.
+    block_high_with_fix: true
+    allow_unfixed_critical: false   # Critical with NO fix available still fails (forces a decision)
+
+  secrets:                    # Gitleaks + TruffleHog + GitHub push protection
+    fail_on_any: true         # any verified or high-confidence secret = hard fail
+    # Note: detected historical secrets that have been rotated should be allow-listed in
+    # policy/gitleaks/.gitleaks.toml with a comment + rotation date — not silently ignored.
+
+  iac:                        # Checkov + KICS + Trivy config + kube-linter + Conftest/OPA
+    fail_on_severity: [critical, high]
+    fail_on_conftest_deny: true     # any explicit Rego `deny` = hard fail
+
+  container:                  # Trivy + Grype image scan
+    fail_on_severity: [critical]
+    block_high_with_fix: true
+    # Hardening lints (Hadolint/Dockle): treat FATAL/CRITICAL findings as build-blocking.
+    hardening_fail_levels: ["FATAL", "CRITICAL"]
+    require_nonroot_user: true
+    require_healthcheck: true
+
+  dast:                       # OWASP ZAP baseline
+    fail_on_severity: [high]  # ZAP "High" alerts block; Medium/Low to POA&M
+    # ZAP exits non-zero on WARN by default; the workflow uses fail_action:false and we enforce
+    # here so Medium/Low don't block but High does.
+
+  stig:                       # OpenSCAP / DISA STIG evaluation
+    fail_on_cat: [I]          # any open CAT I STIG finding blocks; CAT II/III to POA&M
+    # If your program runs STIG eval as "assess only / report" during onboarding, set [].
+
+  license:                    # OSS license policy (policy/allowed-licenses.yaml)
+    fail_on_disallowed: true  # any component under a disallowed license = hard fail
+    fail_on_unknown: false    # unknown/no-license: report + POA&M, don't block (tune as needed)
+
+  build_test:
+    require_tests_pass: true
+    min_coverage_percent: 0   # set a real floor for your workload (e.g., 70)
+
+# ---- 2. POA&M generation + remediation SLAs --------------------------------------------------
+# Any finding at or above `poam.min_severity` that is NOT build-blocking is written to the POA&M
+# with a `Scheduled Completion Date = finding_first_seen + sla_days[severity]`.
+poam:
+  min_severity: low           # record everything Low and above (set to `medium` to reduce noise)
+  # Remediation SLA in calendar days, by mapped severity. RAISE 2.0: raw High+ in production = 21.
+  sla_days:
+    critical: 21              # CAT I — RAISE: remediate/mitigate within 21 calendar days
+    high: 21                  # CAT I — RAISE: 21 calendar days
+    medium: 90                # CAT II
+    low: 365                  # CAT III
+  # If a finding age exceeds its SLA: escalate (the dashboard flags it red; ato-status issue calls
+  # it out). For RAISE, workloads with overdue High+ findings should be isolated/removed pending
+  # AO exception — track that via the control-deviation issue template.
+  escalate_when_overdue: true
+  # Residual-risk ceiling for RAISE-incorporated applications. Findings whose adjusted/residual
+  # severity would exceed this are flagged as "out of RAISE scope — AO escalation required".
+  raise_residual_risk_ceiling: moderate
+
+# ---- 3. Severity normalization ----------------------------------------------------------------
+# How heterogeneous scanner severities collapse onto our scale (critical/high/medium/low/info).
+severity_map:
+  CRITICAL: critical
+  HIGH: high
+  MEDIUM: medium
+  MODERATE: medium
+  LOW: low
+  WARNING: medium
+  ERROR: high
+  NOTE: low
+  INFO: info
+  INFORMATIONAL: info
+  UNKNOWN: low
+  # DISA STIG CAT -> severity
+  CAT I: high
+  CAT_I: high
+  CAT II: medium
+  CAT_II: medium
+  CAT III: low
+  CAT_III: low
+  # CVSS bands (used when only a numeric score is present)
+  cvss_bands:
+    - { min: 9.0, sev: critical }
+    - { min: 7.0, sev: high }
+    - { min: 4.0, sev: medium }
+    - { min: 0.1, sev: low }
+    - { min: 0.0, sev: info }

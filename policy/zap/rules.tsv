@@ -1,0 +1,17 @@
+# OWASP ZAP baseline scan — per-alert threshold overrides.
+# Format (tab-separated):  <pluginId>\t<threshold: WARN|FAIL|IGNORE>\t<optional comment>
+# Default for any alert not listed: WARN (recorded as a finding, fed to the POA&M, does not block).
+# Use FAIL to make a specific alert build-blocking; the overall High-severity block is enforced by
+# policy/thresholds.yaml: gates.dast. Document every IGNORE with a justification + review date.
+#
+# Plugin IDs: https://www.zaproxy.org/docs/alerts/
+
+10021	WARN	(X-Content-Type-Options missing) — recorded; fix via response headers
+10020	WARN	(Missing Anti-clickjacking header)
+10038	WARN	(Content Security Policy header not set) — add CSP
+10063	WARN	(Permissions Policy header not set)
+10096	WARN	(Timestamp disclosure)
+10027	IGNORE	(Information disclosure - suspicious comments) — high false-positive rate; review code separately
+90033	IGNORE	(Loosely-scoped cookie) — N/A for this token-based API; review-by 2026-10-01
+# Example of making something hard-fail:
+# 40012	FAIL	(Cross Site Scripting (Reflected)) — never acceptable

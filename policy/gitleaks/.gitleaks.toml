@@ -1,0 +1,36 @@
+# Gitleaks configuration — secret detection (IA-5, SI-3; SSDF PS.1; RAISE 2.0 Gate 3).
+# Extends the upstream default ruleset; add org-specific patterns and (carefully, with a comment
+# and rotation date) allowlist any historical detections that have been remediated.
+
+title = "DSOP gitleaks config"
+
+[extend]
+useDefault = true
+
+# --- Extra org-specific detectors (examples — customize) -------------------------------------
+[[rules]]
+id = "dod-pki-private-key-block"
+description = "Private key material committed to the repo"
+regex = '''-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----'''
+keywords = ["PRIVATE KEY"]
+
+[[rules]]
+id = "generic-bearer-token"
+description = "Hard-coded bearer/authorization token"
+regex = '''(?i)(authorization|bearer)["'\s:=]+[A-Za-z0-9\-_\.=]{20,}'''
+keywords = ["authorization", "bearer"]
+
+# --- Allowlist (USE SPARINGLY; document every entry) -----------------------------------------
+[allowlist]
+description = "False positives, test fixtures, and historical secrets that have been rotated."
+paths = [
+  '''(^|/)tests?/''',                 # test fixtures (still review them)
+  '''(^|/)site/assets/''',            # vendored front-end assets
+  '''\.example$''', '''\.sample$''',  # *.example / *.sample template files
+]
+regexes = [
+  # Example: a deliberately fake key used in docs/tests. Keep the comment + date.
+  # '''AKIAIOSFODNN7EXAMPLE''',       # AWS docs example key — not real
+]
+# Example of allowlisting a single rotated commit (uncomment + fill in if you ever need it):
+# commits = [ "<sha>" ]               # secret leaked here was rotated on YYYY-MM-DD; ticket #NNN

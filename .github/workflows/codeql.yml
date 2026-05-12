@@ -1,0 +1,49 @@
+# CodeQL static analysis — SAST (SA-11(1), SA-15(7), RA-5; SSDF PW.7; RAISE 2.0 Gate 1)
+#
+# Results land in GitHub code scanning automatically. The body-of-evidence job in
+# devsecops-pipeline.yml also pulls the CodeQL SARIF (via the code scanning API) into the
+# normalized evidence set. Consider also enabling CodeQL "default setup" in repo Security
+# settings; this workflow is the "advanced setup" equivalent so the configuration is in-repo
+# (CM-2: the analysis config is itself version-controlled).
+
+name: codeql
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "31 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # Add languages your real workload uses (java, javascript-typescript, go, csharp, cpp, ruby, swift, kotlin).
+        language: [python, actions]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
+          queries: security-extended,security-and-quality
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

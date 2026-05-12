@@ -1,0 +1,95 @@
+name: "POA&M item"
+description: "Track a Plan of Action & Milestones item (open weakness/finding requiring remediation or risk acceptance). Mirrors eMASS POA&M fields."
+title: "[POA&M] <short weakness description>"
+labels: ["poam"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this to track a weakness through remediation. The pipeline auto-generates a POA&M
+        from scanner findings above threshold (`policy/thresholds.yaml`); this template is for
+        items that need a human-managed record (e.g., a finding that will be risk-accepted, a
+        process weakness from an assessment, an inherited-control gap). Fields map to eMASS.
+        RMF/RAISE evidence: **CA-5**, RAISE residual-risk & 21-day High-finding remediation.
+  - type: input
+    id: control
+    attributes:
+      label: "Associated security control(s) / CCI(s)"
+      placeholder: "e.g., RA-5, SI-2 / CCI-001643"
+    validations: { required: true }
+  - type: textarea
+    id: weakness
+    attributes:
+      label: "Control vulnerability description (the weakness)"
+    validations: { required: true }
+  - type: dropdown
+    id: source
+    attributes:
+      label: "Source identifying the weakness"
+      options:
+        - "Pipeline scan — SAST (CodeQL/Semgrep)"
+        - "Pipeline scan — SCA / dependency (Trivy/Grype/Dependency-Check)"
+        - "Pipeline scan — container image (Trivy/Grype)"
+        - "Pipeline scan — IaC (Checkov/KICS)"
+        - "Pipeline scan — DAST (ZAP)"
+        - "Pipeline scan — secrets (Gitleaks/TruffleHog)"
+        - "STIG / SCAP (OpenSCAP) finding"
+        - "Security control assessment (SCA)"
+        - "Penetration test"
+        - "Inherited control gap (CRM)"
+        - "Self-identified / other"
+    validations: { required: true }
+  - type: dropdown
+    id: raw_severity
+    attributes:
+      label: "Raw severity (CAT)"
+      options: ["CAT I (High/Critical)", "CAT II (Medium/High)", "CAT III (Low)"]
+    validations: { required: true }
+  - type: input
+    id: adjusted_severity
+    attributes:
+      label: "Adjusted/residual severity after mitigations"
+      placeholder: "e.g., Moderate (must not exceed Moderate for RAISE-incorporated apps)"
+  - type: textarea
+    id: mitigations
+    attributes:
+      label: "Mitigations / compensating controls in place"
+  - type: textarea
+    id: recommendations
+    attributes:
+      label: "Remediation plan / recommendations"
+    validations: { required: true }
+  - type: input
+    id: resources
+    attributes:
+      label: "Resources required"
+      placeholder: "e.g., 1 dev-week; vendor patch; new library version"
+  - type: input
+    id: scheduled_completion
+    attributes:
+      label: "Scheduled completion date (YYYY-MM-DD)"
+      placeholder: "Per SLA: CAT I/High in prod ≤ 21 calendar days (RAISE 2.0 RIG)"
+    validations: { required: true }
+  - type: input
+    id: poc
+    attributes:
+      label: "Point of contact (name / org / email)"
+    validations: { required: true }
+  - type: dropdown
+    id: status
+    attributes:
+      label: "Status"
+      options: ["Ongoing", "Risk accepted (AO approved)", "Completed", "Not applicable"]
+    validations: { required: true }
+  - type: textarea
+    id: milestones
+    attributes:
+      label: "Milestones (each with a date)"
+      placeholder: |
+        - 2026-05-20  Patch identified / PR opened
+        - 2026-05-27  Patch merged & deployed to staging
+        - 2026-06-02  Verified in production; finding closed
+  - type: textarea
+    id: comments
+    attributes:
+      label: "Comments / change history"

@@ -1,0 +1,108 @@
+# Custom Semgrep rules layered on top of the registry rulesets (p/security-audit, p/owasp-top-ten,
+# p/secrets, p/dockerfile, p/terraform, p/kubernetes) used in the SAST gate.
+# Evidence: SA-11(1) static analysis, SA-15(7), PW.5/PW.7 (SSDF), RAISE 2.0 Gate 1.
+#
+# These are intentionally conservative, high-signal patterns. Add your program's secure-coding
+# standard here as code (e.g., banned crypto, banned functions, required input validation).
+
+rules:
+  - id: dsop-hardcoded-secret-assignment
+    languages: [python, javascript, typescript, go, java, ruby, yaml]
+    severity: ERROR
+    message: >-
+      Possible hard-coded secret/credential. Use a secrets manager / environment variable; never
+      commit secrets (IA-5, SI-3; SSDF PS.1; RAISE Gate 3).
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      references: ["https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/"]
+      controls: ["IA-5", "SI-3"]
+    patterns:
+      - pattern-regex: '(?i)(password|passwd|pwd|secret|api[_-]?key|apikey|access[_-]?key|client[_-]?secret|token|priv[_-]?key)\s*[:=]\s*["''][A-Za-z0-9/\+\-_=]{12,}["'']'
+      - pattern-not-regex: '(?i)(example|sample|dummy|fake|changeme|placeholder|xxxxx|<.*>|\$\{.*\}|os\.environ|getenv|process\.env)'
+
+  - id: dsop-weak-crypto-md5-sha1
+    languages: [python, javascript, typescript, go, java]
+    severity: WARNING
+    message: >-
+      Weak hash algorithm (MD5/SHA-1) used. Use SHA-256+ (or a vetted KDF for passwords). DoD
+      requires FIPS-validated cryptographic modules where crypto is used for security (SC-13).
+    metadata:
+      category: security
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      controls: ["SC-13"]
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")
+      - pattern: MessageDigest.getInstance("MD5")
+      - pattern: MessageDigest.getInstance("SHA-1")
+
+  - id: dsop-disable-tls-verification
+    languages: [python, javascript, typescript, go]
+    severity: ERROR
+    message: >-
+      TLS certificate verification appears to be disabled. This breaks transmission
+      confidentiality/integrity (SC-8). Never disable verification outside controlled tests.
+    metadata:
+      category: security
+      cwe: "CWE-295: Improper Certificate Validation"
+      controls: ["SC-8", "SC-13"]
+    pattern-either:
+      - pattern: requests.$M(..., verify=False, ...)
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: 'rejectUnauthorized: false'
+      - pattern: InsecureSkipVerify = true
+
+  - id: dsop-python-eval-exec-on-input
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Dynamic code execution (eval/exec) — high injection risk (CWE-95). Refuse unless input is
+      provably trusted and there is no alternative. SAST gate / RA-5 / SI-10.
+    metadata:
+      category: security
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: exec(...)
+
+  - id: dsop-subprocess-shell-true
+    languages: [python]
+    severity: WARNING
+    message: >-
+      subprocess called with shell=True — command-injection risk if any argument is influenced by
+      input (CWE-78). Pass an argv list and shell=False.
+    metadata:
+      category: security
+      cwe: "CWE-78: OS Command Injection"
+    pattern-either:
+      - pattern: subprocess.run(..., shell=True, ...)
+      - pattern: subprocess.Popen(..., shell=True, ...)
+      - pattern: subprocess.call(..., shell=True, ...)
+
+  - id: dsop-dockerfile-root-user
+    languages: [dockerfile]
+    severity: WARNING
+    message: >-
+      Container appears to run as root (no non-root USER, or USER root at the end). Run as a
+      non-root user with least privilege (CM-6, AC-6; NIST SP 800-190; RAISE container hardening).
+    metadata:
+      category: security
+      controls: ["CM-6", "AC-6"]
+    patterns:
+      - pattern-either:
+          - pattern: |
+              USER root
+          - pattern-regex: '(?s)^(?!.*\nUSER\s+(?!root)\S+).*$'   # no non-root USER instruction anywhere
+
+  - id: dsop-debug-true-in-prod-config
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Debug mode enabled. Disable debug in deployed configurations (CM-6, SI-11 — error handling).
+    metadata: { category: security, controls: ["CM-6"] }
+    pattern-either:
+      - pattern: app.run(..., debug=True, ...)
+      - pattern: DEBUG = True

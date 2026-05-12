@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dsop-sample
+  labels:
+    # Enforce the Kubernetes Pod Security Standards "restricted" profile at admission (CM-6, AC-6;
+    # NIST SP 800-190; DISA Kubernetes STIG themes).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    app.kubernetes.io/part-of: dsop-reference-system

@@ -1,0 +1,46 @@
+# Trivy configuration (used for filesystem, config, and image scans).
+# Docs: https://aquasecurity.github.io/trivy/latest/docs/references/configuration/config-file/
+# Evidence: RA-5, SI-2, CM-6 (image), CM-2/CM-6/SC-7 (config); RAISE 2.0 Gates 2 & 4.
+
+# Report everything; the build-gate decision is made by policy/thresholds.yaml, not here.
+severity:
+  - CRITICAL
+  - HIGH
+  - MEDIUM
+  - LOW
+
+# Detect vulns in OS packages and language libraries.
+vulnerability:
+  type:
+    - os
+    - library
+
+# Also pick up misconfigurations and embedded secrets during fs scans.
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret
+    - license
+
+# Don't fail Trivy itself on findings — the gate script decides. (Set a non-zero exit-code here
+# only if you want Trivy alone to block, which we don't, to keep one source of truth.)
+exit-code: 0
+
+# Ignore unfixed vulns in REPORTS? No — we want them visible (they may still be POA&M items).
+ignore-unfixed: false
+
+# Cache & DB settings left at defaults; in air-gapped/IL4-5, point `db.repository` /
+# `db.java-repository` at an internal mirror and pre-load the DB.
+
+misconfiguration:
+  # Include built-in checks for Dockerfile, Kubernetes, Terraform, CloudFormation, Helm, etc.
+  include-non-failures: false
+
+secret:
+  # Trivy ships a secret ruleset; Gitleaks + TruffleHog are the primary secret scanners, this is
+  # defense-in-depth.
+  config: ""
+
+# Suppression file (CVE-by-CVE, with justification). Keep entries dated and tied to a POA&M item.
+# (Specified per-invocation via `trivyignores:` in the workflow -> policy/trivy/.trivyignore)

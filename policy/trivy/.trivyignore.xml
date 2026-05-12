@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OWASP Dependency-Check suppression file.
+  Same rules as policy/trivy/.trivyignore: every <suppress> MUST include a <notes> block with the
+  justification, linked POA&M item, approver, and review-by date. The SCA reviews this file.
+  Schema: https://jeremylong.github.io/DependencyCheck/general/suppression.html
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+  <!-- Example (delete — illustrative only):
+  <suppress>
+    <notes><![CDATA[
+      False positive: CPE match is wrong (our 'foo' is not the 'foo' in the CVE). Confirmed by
+      maintainer. Tracking issue #17. Reviewed by SCA 2026-04-01; review-by 2026-10-01.
+    ]]></notes>
+    <packageUrl regex="true">^pkg:pypi/foo@.*$</packageUrl>
+    <cve>CVE-2020-00000</cve>
+  </suppress>
+  -->
+</suppressions>

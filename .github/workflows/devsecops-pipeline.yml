@@ -1,0 +1,665 @@
+# DevSecOps Pipeline — RMF/cATO/RAISE 2.0 Body of Evidence
+#
+# This single workflow runs the DevSecOps lifecycle gates, then assembles the Body of Evidence
+# and publishes the Authorizing Official dashboard to GitHub Pages.
+#
+# Gates -> NIST 800-53 / SSDF / RAISE 2.0 mapping is documented in:
+#   docs/pipeline-gates.md  and  compliance/crosswalks/
+#
+# Fail-the-build policy lives in policy/thresholds.yaml (the "quality gates").
+# Tool config lives in policy/.
+#
+# NOTE for IL4/IL5: pin every `uses:` to a full commit SHA, source actions from an internal
+# mirror / Iron Bank tooling images, and run on self-hosted runners in your enclave. See
+# docs/impact-level-notes.md. The version tags below are for IL2/GitHub.com convenience.
+
+name: devsecops-pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily continuous-monitoring run (CA-7 / cATO Pillar 1 / RAISE ConMon).
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devsecops-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE_NAME: ${{ github.repository }}/sample-app
+  REGISTRY: ghcr.io
+  EVIDENCE_DIR: evidence
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Build + unit test + coverage  (SA-3, SA-11, SA-15; SSDF PW.6/PW.8; RAISE: pipeline must build & test)
+  # ---------------------------------------------------------------------------
+  build-test:
+    name: Build & Unit Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install app + test deps
+        working-directory: sample-app
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint (ruff)
+        working-directory: sample-app
+        run: ruff check . || true   # advisory; style is not a control gate
+      - name: Unit tests + coverage
+        working-directory: sample-app
+        run: pytest --cov=app --cov-report=xml --cov-report=term --junitxml=../test-results.xml
+      - name: Compute image tag
+        id: meta
+        run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-test-results
+          path: |
+            test-results.xml
+            sample-app/coverage.xml
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 2. SAST — Semgrep  (SA-11(1), SA-15(7), RA-5; SSDF PW.7; RAISE Gate 1)
+  #    (CodeQL runs in codeql.yml so its results land in GitHub code scanning natively.)
+  # ---------------------------------------------------------------------------
+  sast-semgrep:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep scan (registry rulesets + custom DoD secure-coding rules)
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/default
+            p/security-audit
+            p/owasp-top-ten
+            p/secrets
+            p/dockerfile
+            p/terraform
+            p/kubernetes
+            ./policy/semgrep/dod-secure-coding.yml
+          generateSarif: "true"
+        env:
+          SEMGREP_RULES: ""   # configured via `config:` above
+      - name: Upload SARIF to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-sast-semgrep
+          path: semgrep.sarif
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 3. SCA / dependency vulnerabilities  (RA-5, SI-2, SA-22; SSDF PW.4/RV.1; RAISE Gate 2)
+  # ---------------------------------------------------------------------------
+  sca-dependencies:
+    name: SCA (Trivy fs · Grype · Dependency-Check)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan (vuln + misconfig + secrets) -> SARIF + JSON
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+          trivyignores: policy/trivy/.trivyignore
+        env:
+          TRIVY_CONFIG: policy/trivy/trivy.yaml
+      - name: Trivy filesystem scan -> JSON (for evidence aggregation)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs.json
+        env:
+          TRIVY_CONFIG: policy/trivy/trivy.yaml
+      - name: Grype dependency scan -> SARIF + JSON
+        uses: anchore/scan-action@v5
+        id: grype
+        with:
+          path: .
+          fail-build: false
+          output-format: sarif
+          severity-cutoff: medium
+      - name: Grype JSON output
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype dir:. -o json > grype-fs.json || true
+      - name: OWASP Dependency-Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: ${{ github.repository }}
+          path: .
+          format: "ALL"           # HTML, XML, JSON, SARIF, CSV
+          out: dependency-check-report
+          args: >-
+            --failOnCVSS 11
+            --enableExperimental
+            --suppression policy/trivy/.trivyignore.xml || true
+        continue-on-error: true
+      - name: Upload SARIF to code scanning (Trivy fs)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-sca
+          path: |
+            trivy-fs.sarif
+            trivy-fs.json
+            results.sarif
+            grype-fs.json
+            dependency-check-report/**
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 4. SBOM — Syft -> SPDX 2.3 + CycloneDX 1.5 (source tree)  (CM-8, SR-3/SR-4; SSDF PS.3.2; RAISE Gate 2)
+  #    (the *image* SBOM is produced in the container job.)
+  # ---------------------------------------------------------------------------
+  sbom-source:
+    name: SBOM (source · SPDX + CycloneDX)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom-source.spdx.json
+          artifact-name: sbom-source.spdx.json
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-source.cdx.json
+          artifact-name: sbom-source.cdx.json
+      - name: Validate SBOM against NTIA minimum elements (informational)
+        run: python scripts/evidence_common.py --validate-sbom sbom-source.cdx.json || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-sbom-source
+          path: |
+            sbom-source.spdx.json
+            sbom-source.cdx.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 5. Secrets scanning — Gitleaks + TruffleHog  (IA-5, SI-3; SSDF PS.1; RAISE Gate 3)
+  #    (GitHub secret scanning + push protection should also be enabled on the repo.)
+  # ---------------------------------------------------------------------------
+  secrets-scan:
+    name: Secrets (Gitleaks · TruffleHog)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: policy/gitleaks/.gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
+      - name: TruffleHog (verified secrets only)
+        uses: trufflesecurity/trufflehog@v3.82.6
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --results=verified,unknown --json
+        continue-on-error: true
+      - name: Normalize secrets evidence
+        if: always()
+        run: |
+          mkdir -p secrets-evidence
+          cp -f gitleaks-report.json secrets-evidence/ 2>/dev/null || true
+          cp -f results.json secrets-evidence/trufflehog.json 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-secrets
+          path: secrets-evidence
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 6. IaC / config scanning  (CM-2/CM-6, CM-7, SC-7, AC-3; SSDF PW.9; RAISE expected practice)
+  # ---------------------------------------------------------------------------
+  iac-scan:
+    name: IaC (Checkov · KICS · Trivy config · kube-linter · Conftest/OPA)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkov (Terraform · Kubernetes · Dockerfile · GitHub Actions)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          config_file: policy/checkov/.checkov.yaml
+          output_format: cli,sarif,json
+          output_file_path: console,checkov.sarif,checkov.json
+          soft_fail: true
+      - name: KICS scan
+        uses: Checkmarx/kics-github-action@v2
+        with:
+          path: deploy,sample-app,.github
+          output_path: kics-results
+          output_formats: "json,sarif"
+          fail_on: high
+          ignore_on_exit: results
+      - name: Trivy config scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: json
+          output: trivy-config.json
+      - name: kube-linter
+        uses: stackrox/kube-linter-action@v1
+        with:
+          directory: deploy/k8s
+          format: sarif
+          output-file: kube-linter.sarif
+        continue-on-error: true
+      - name: Conftest (OPA/Rego policy — Dockerfile, k8s, terraform)
+        run: |
+          curl -sSfL https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin conftest
+          conftest test deploy/k8s --policy policy/opa --output json > conftest-k8s.json || true
+          conftest test deploy/terraform --policy policy/opa --output json > conftest-tf.json || true
+          conftest test sample-app/Dockerfile --parser dockerfile --policy policy/opa --output json > conftest-dockerfile.json || true
+      - name: Upload SARIF to code scanning (Checkov)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-iac
+          path: |
+            checkov.sarif
+            checkov.json
+            kics-results/**
+            trivy-config.json
+            kube-linter.sarif
+            conftest-k8s.json
+            conftest-tf.json
+            conftest-dockerfile.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 7. License / OSS policy  (CM-10; SSDF PW.4; RAISE Gate 2 — component analysis)
+  # ---------------------------------------------------------------------------
+  license-compliance:
+    name: License / OSS policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate CycloneDX SBOM (with license data)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom-license.cdx.json
+          artifact-name: sbom-license.cdx.json
+      - name: Evaluate licenses against policy/allowed-licenses.yaml
+        run: python scripts/evidence_common.py --check-licenses sbom-license.cdx.json policy/allowed-licenses.yaml --out license-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-license
+          path: |
+            sbom-license.cdx.json
+            license-report.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 8. Container build + scan + sign + provenance  (RA-5, CM-6, SI-2, SI-7, SR-4, SR-11;
+  #    NIST SP 800-190; SLSA Build L2+; RAISE Gates 4, 7, 8)
+  # ---------------------------------------------------------------------------
+  container:
+    name: Container build · scan · sign · SBOM · provenance
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write          # for keyless cosign signing + SLSA provenance attestation
+      attestations: write      # for actions/attest-build-provenance
+      security-events: write
+    outputs:
+      image-ref: ${{ steps.push.outputs.image-ref }}
+      image-digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint (Dockerfile lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: sample-app/Dockerfile
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (load locally; do not push yet)
+        uses: docker/build-push-action@v6
+        with:
+          context: sample-app
+          file: sample-app/Dockerfile
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }}
+          provenance: false
+      - name: Dockle (CIS / container best-practice lint)
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/goodwithtech/dockle/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/')
+          curl -sSfL -o dockle.tar.gz "https://github.com/goodwithtech/dockle/releases/download/v${VERSION}/dockle_${VERSION}_Linux-64bit.tar.gz"
+          tar zxf dockle.tar.gz dockle
+          ./dockle --format json --output dockle.json --exit-code 0 ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }} || true
+      - name: Trivy image scan -> SARIF + JSON
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+          vuln-type: os,library
+        env:
+          TRIVY_CONFIG: policy/trivy/trivy.yaml
+      - name: Trivy image scan -> JSON
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }}
+          format: json
+          output: trivy-image.json
+        env:
+          TRIVY_CONFIG: policy/trivy/trivy.yaml
+      - name: Grype image scan -> JSON
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          grype ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }} -o json > grype-image.json || true
+      - name: Syft image SBOM (SPDX + CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }}
+          format: spdx-json
+          output-file: sbom-image.spdx.json
+      - name: Syft image SBOM (CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_NAME }}:${{ needs.build-test.outputs.image-tag }}
+          format: cyclonedx-json
+          output-file: sbom-image.cdx.json
+      - name: Enforce container gate (policy/thresholds.yaml)
+        run: python scripts/evidence_common.py --gate-container trivy-image.json policy/thresholds.yaml
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push image
+        id: push
+        if: github.event_name != 'pull_request'
+        run: |
+          IMG="${REGISTRY}/${IMAGE_NAME}:${{ needs.build-test.outputs.image-tag }}"
+          IMG_LC=$(echo "$IMG" | tr '[:upper:]' '[:lower:]')
+          docker tag "${IMAGE_NAME}:${{ needs.build-test.outputs.image-tag }}" "$IMG_LC"
+          docker push "$IMG_LC"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMG_LC" | cut -d'@' -f2)
+          echo "image-ref=$IMG_LC" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless / Sigstore) and attach SBOM attestation
+        if: github.event_name != 'pull_request'
+        run: |
+          cosign sign --yes "${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}"
+          cosign attest --yes --predicate sbom-image.cdx.json --type cyclonedx \
+            "${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}"
+      - name: Generate SLSA build provenance attestation
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ steps.push.outputs.image-ref }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Upload SARIF to code scanning (Trivy image · Hadolint)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+      - name: Upload SARIF to code scanning (Hadolint)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-container
+          path: |
+            hadolint.sarif
+            dockle.json
+            trivy-image.sarif
+            trivy-image.json
+            grype-image.json
+            sbom-image.spdx.json
+            sbom-image.cdx.json
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 9. DAST — OWASP ZAP baseline against the running image  (SA-11(8), CA-8; SSDF PW.8; RAISE Gate 5)
+  # ---------------------------------------------------------------------------
+  dast:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build & run the app locally
+        run: |
+          docker build -t local/sample-app:dast sample-app
+          docker run -d --name app -p 8080:8080 local/sample-app:dast
+          for i in $(seq 1 30); do curl -sf http://localhost:8080/healthz && break || sleep 2; done
+      - name: OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:8080"
+          rules_file_name: policy/zap/rules.tsv
+          cmd_options: "-a -J zap-report.json"
+          allow_issue_writing: false
+          fail_action: false
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-dast
+          path: |
+            zap-report.json
+            report_html.html
+            report_md.md
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 10. STIG / SCAP compliance — OpenSCAP container evaluation + .ckl export  (CM-6; DISA Container Platform SRG)
+  #
+  #     This job demonstrates an OpenSCAP evaluation flow. Programs MUST supply the appropriate
+  #     DISA SCAP benchmark / STIG content (from the DoD Cyber Exchange — public.cyber.mil) for
+  #     their actual base OS / container platform; the placeholder below uses the OpenSCAP
+  #     project's bundled content as a working stand-in so the pipeline produces a result file.
+  # ---------------------------------------------------------------------------
+  stig-scap:
+    name: STIG / SCAP (OpenSCAP)
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the app image
+        run: docker build -t local/sample-app:stig sample-app
+      - name: Run OpenSCAP evaluation against the image filesystem
+        run: |
+          set -x
+          mkdir -p stig-evidence
+          # Export the image rootfs and run oscap-podman style eval via the official oscap image.
+          # Replace the datastream below with your program's DISA SCAP/STIG content.
+          docker run --rm -v "$PWD/stig-evidence:/out" --entrypoint /bin/sh \
+            ghcr.io/oscap/openscap-scanner:latest -c '
+              set -e
+              # Use a generic SCAP datastream shipped with the scanner as a working placeholder.
+              DS=$(ls /usr/share/xml/scap/ssg/content/*-ds.xml 2>/dev/null | head -n1 || true)
+              if [ -n "$DS" ]; then
+                oscap xccdf eval --results /out/openscap-results.xml --report /out/openscap-report.html "$DS" || true
+              else
+                echo "<no-scap-content/>" > /out/openscap-results.xml
+              fi
+            ' || true
+          echo "See docs/pipeline-gates.md (#stig) — supply your DISA STIG/SRG SCAP content here." > stig-evidence/README.txt
+      - name: Convert SCAP results to a STIG checklist (.ckl) skeleton
+        run: python scripts/evidence_common.py --scap-to-ckl stig-evidence/openscap-results.xml --out stig-evidence/checklist.ckl || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-stig
+          path: stig-evidence
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # 11. Body of Evidence — aggregate all gate outputs, map to controls, build POA&M,
+  #     snapshot ConMon, assemble the eMASS package, build the dashboard data.
+  #     (CA-2, CA-5, CA-7, PL-2; RAISE quarterly-review artifacts; cATO Pillar 1)
+  # ---------------------------------------------------------------------------
+  body-of-evidence:
+    name: Body of Evidence (aggregate · map controls · POA&M · ConMon · eMASS package · dashboard)
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - build-test
+      - sast-semgrep
+      - sca-dependencies
+      - sbom-source
+      - secrets-scan
+      - iac-scan
+      - license-compliance
+      - container
+      - dast
+      - stig-scap
+    permissions:
+      contents: write   # to attach evidence to a Release when triggered by `release: published`
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r scripts/requirements.txt
+      - name: Download all gate artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: raw-evidence
+      - name: 1) Aggregate & normalize all scanner outputs
+        run: python scripts/aggregate_evidence.py --input raw-evidence --out ${{ env.EVIDENCE_DIR }} --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: 2) Map findings + gate coverage to NIST 800-53 controls
+        run: python scripts/map_controls.py --evidence ${{ env.EVIDENCE_DIR }} --catalog compliance/control-catalog/control-catalog.yaml --out ${{ env.EVIDENCE_DIR }}/boe
+      - name: 3) Generate POA&M (eMASS column layout)
+        run: python scripts/generate_poam.py --evidence ${{ env.EVIDENCE_DIR }} --thresholds policy/thresholds.yaml --out ${{ env.EVIDENCE_DIR }}/boe
+      - name: 4) Update continuous-monitoring history
+        run: python scripts/update_conmon.py --evidence ${{ env.EVIDENCE_DIR }} --history ${{ env.EVIDENCE_DIR }}/boe/conmon_history.json --commit "${{ github.sha }}" --run-id "${{ github.run_id }}"
+      - name: 5) Assemble eMASS submission package
+        run: python scripts/build_emass_package.py --evidence ${{ env.EVIDENCE_DIR }} --catalog compliance/control-catalog/control-catalog.yaml --ssp compliance/ssp/system-security-plan.md --out ${{ env.EVIDENCE_DIR }}/emass-package
+      - name: 6) Build AO dashboard data
+        run: python scripts/build_dashboard_data.py --evidence ${{ env.EVIDENCE_DIR }} --catalog compliance/control-catalog/control-catalog.yaml --site site --repo "${{ github.repository }}" --ref "${{ github.ref_name }}" --sha "${{ github.sha }}" --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: Upload consolidated Body of Evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: body-of-evidence
+          path: ${{ env.EVIDENCE_DIR }}
+          retention-days: 365
+      - name: Upload site (with fresh data) for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Attach evidence + eMASS package to the Release (on release published)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.EVIDENCE_DIR }}/emass-package/**
+            ${{ env.EVIDENCE_DIR }}/boe/poam.csv
+            ${{ env.EVIDENCE_DIR }}/boe/controls.json
+            ${{ env.EVIDENCE_DIR }}/sbom/**
+
+  # ---------------------------------------------------------------------------
+  # 12. Publish the AO dashboard to GitHub Pages
+  # ---------------------------------------------------------------------------
+  publish-dashboard:
+    name: Publish AO dashboard (GitHub Pages)
+    runs-on: ubuntu-latest
+    needs: [body-of-evidence]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

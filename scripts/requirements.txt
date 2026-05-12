@@ -1,0 +1,3 @@
+# Evidence engine dependencies (kept minimal & pure-Python so it runs in any runner, incl.
+# air-gapped IL4/IL5 with an internal PyPI mirror).
+PyYAML>=6.0

@@ -1,0 +1,48 @@
+# Checkov configuration — IaC / config policy-as-code.
+# Docs: https://www.checkov.io/2.Basics/Configuring%20Checkov.html
+# Evidence: CM-2/CM-6 (baseline & secure settings), CM-7 (least functionality), SC-7 (boundary),
+# AC-3 (access enforcement); SSDF PW.9 (secure-by-default settings).
+
+# Scan these frameworks.
+framework:
+  - terraform
+  - terraform_plan
+  - kubernetes
+  - helm
+  - dockerfile
+  - github_actions
+  - secrets
+
+# Where to look (relative to repo root) and what to skip.
+directory:
+  - .
+skip-path:
+  - .git
+  - site/assets
+  - sample-app/tests
+  - "**/.terraform"
+
+# Don't hard-fail Checkov here; the gate decision is centralized in policy/thresholds.yaml.
+soft-fail: true
+
+# Be quiet about passed checks in the console; the JSON/SARIF output carries full detail.
+compact: true
+quiet: true
+
+# Download the latest external/community checks too (in air-gapped/IL4-5, vendor these and set
+# `--no-external-modules`).
+download-external-modules: true
+
+# Skip checks that are known false-positives or intentionally accepted — DOCUMENT each one with a
+# comment (linked risk-acceptance issue / POA&M item / approver / review date). Prefer fixing.
+skip-check: []
+# Example:
+# skip-check:
+#   - CKV_K8S_8   # liveness probe not applicable to this job-style workload. Issue #12. Approved 2026-04-01.
+
+# Optionally enforce only a curated baseline (uncomment to use an allowlist instead of "all
+# checks"):
+# check:
+#   - CKV_K8S_*      # all Kubernetes checks
+#   - CKV_DOCKER_*   # all Dockerfile checks
+#   - CKV_AWS_*      # all AWS Terraform checks

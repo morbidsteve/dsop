@@ -1,0 +1,314 @@
+{
+  "generated": "2026-05-12T18:42:31Z",
+  "gates": [
+    {
+      "id": "build-test",
+      "phase": "Build / Test",
+      "name": "Build & unit test + coverage",
+      "tools": [
+        "pytest",
+        "ruff"
+      ],
+      "raise_gate": [],
+      "fail_policy": "Tests must pass; coverage floor (configurable).",
+      "controls_evidenced": [
+        "CA-2",
+        "SA-11",
+        "SA-3"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "sast",
+      "phase": "Test",
+      "name": "Static Application Security Testing",
+      "tools": [
+        "CodeQL",
+        "Semgrep (+ custom DoD rules)"
+      ],
+      "raise_gate": [
+        1
+      ],
+      "fail_policy": "Build fails on new Critical/High; pre-existing -> POA&M.",
+      "controls_evidenced": [
+        "CA-2",
+        "SA-11",
+        "SA-15",
+        "SA-8",
+        "SC-13",
+        "SC-8",
+        "SI-7"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "sca",
+      "phase": "Build / Test",
+      "name": "Software Composition Analysis (dependency vulns)",
+      "tools": [
+        "Trivy (fs)",
+        "Grype",
+        "OWASP Dependency-Check"
+      ],
+      "raise_gate": [
+        2
+      ],
+      "fail_policy": "Build fails on Critical, or High with a fix available; else -> POA&M.",
+      "controls_evidenced": [
+        "CA-2",
+        "RA-5",
+        "SA-11",
+        "SA-22",
+        "SI-2",
+        "SI-3",
+        "SR-3"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "sbom",
+      "phase": "Build",
+      "name": "Software Bill of Materials",
+      "tools": [
+        "Syft -> SPDX 2.3 + CycloneDX 1.5 (source & image)"
+      ],
+      "raise_gate": [
+        2
+      ],
+      "fail_policy": "Always produced; structurally checked vs NTIA minimum elements.",
+      "controls_evidenced": [
+        "CM-8",
+        "SA-22",
+        "SR-11",
+        "SR-3",
+        "SR-4"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "license",
+      "phase": "Build",
+      "name": "OSS license / component policy",
+      "tools": [
+        "license policy check (vs policy/allowed-licenses.yaml)"
+      ],
+      "raise_gate": [
+        2
+      ],
+      "fail_policy": "Build fails on a disallowed license; review-required -> POA&M.",
+      "controls_evidenced": [
+        "CA-2",
+        "CM-10"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "secrets",
+      "phase": "Develop / Build",
+      "name": "Secrets detection",
+      "tools": [
+        "Gitleaks",
+        "TruffleHog",
+        "GitHub push protection"
+      ],
+      "raise_gate": [
+        3
+      ],
+      "fail_policy": "Any verified/high-confidence secret = hard fail.",
+      "controls_evidenced": [
+        "CA-2",
+        "IA-5",
+        "SI-3"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "iac",
+      "phase": "Build",
+      "name": "IaC / configuration scanning",
+      "tools": [
+        "Checkov",
+        "KICS",
+        "Trivy config",
+        "kube-linter",
+        "Conftest/OPA"
+      ],
+      "raise_gate": [],
+      "fail_policy": "Build fails on Critical/High or any Rego deny; else -> POA&M. (RAISE: expected practice, not a named gate.)",
+      "controls_evidenced": [
+        "AC-2",
+        "AC-3",
+        "AC-6",
+        "AU-12",
+        "AU-2",
+        "CA-2",
+        "CM-11",
+        "CM-2",
+        "CM-6",
+        "CM-7",
+        "CP-9",
+        "PL-8",
+        "SA-15",
+        "SA-8",
+        "SC-28",
+        "SC-7",
+        "SC-8"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "container",
+      "phase": "Build",
+      "name": "Container image scan + hardening + sign + provenance",
+      "tools": [
+        "Trivy (image)",
+        "Grype",
+        "Hadolint",
+        "Dockle",
+        "Syft (image SBOM)",
+        "cosign/Sigstore",
+        "SLSA provenance"
+      ],
+      "raise_gate": [
+        4,
+        7,
+        8
+      ],
+      "fail_policy": "Build fails on Critical image CVE, High-with-fix, or FATAL hardening; non-root + healthcheck required; signed image pushed to GHCR.",
+      "controls_evidenced": [
+        "AC-6",
+        "CA-2",
+        "CM-11",
+        "CM-2",
+        "CM-6",
+        "CM-7",
+        "CM-8",
+        "RA-5",
+        "SA-10",
+        "SA-11",
+        "SA-8",
+        "SI-2",
+        "SI-3",
+        "SI-7",
+        "SR-11",
+        "SR-3",
+        "SR-4"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "dast",
+      "phase": "Test",
+      "name": "Dynamic Application Security Testing",
+      "tools": [
+        "OWASP ZAP baseline"
+      ],
+      "raise_gate": [
+        5
+      ],
+      "fail_policy": "Build fails on ZAP High; Medium/Low -> POA&M.",
+      "controls_evidenced": [
+        "CA-2",
+        "CA-8",
+        "RA-5",
+        "SA-11"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "stig",
+      "phase": "Test / Operate",
+      "name": "STIG / SCAP compliance",
+      "tools": [
+        "OpenSCAP",
+        "(supply your DISA STIG/SRG SCAP content)"
+      ],
+      "raise_gate": [],
+      "fail_policy": "Build fails on open CAT I; CAT II/III -> POA&M. (DISA Container Platform SRG / Kubernetes STIG.)",
+      "controls_evidenced": [
+        "CA-2",
+        "CM-6",
+        "RA-5"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "supply-chain",
+      "phase": "Monitor",
+      "name": "Supply-chain hygiene",
+      "tools": [
+        "OpenSSF Scorecard"
+      ],
+      "raise_gate": [],
+      "fail_policy": "Reported; weak checks -> findings/POA&M candidates.",
+      "controls_evidenced": [
+        "AC-2",
+        "CM-3",
+        "CM-5",
+        "IA-2",
+        "SA-15",
+        "SI-4",
+        "SR-3"
+      ],
+      "executed": false,
+      "finding_count": 0
+    },
+    {
+      "id": "review",
+      "phase": "Release",
+      "name": "ISSM review checkpoint",
+      "tools": [
+        "PR review (CODEOWNERS) + ATO Status issue + dashboard"
+      ],
+      "raise_gate": [
+        6
+      ],
+      "fail_policy": "Branch protection requires Code Owner review; release gated on the BoE being current.",
+      "controls_evidenced": [
+        "CM-3",
+        "CM-4",
+        "SA-10"
+      ],
+      "executed": true,
+      "finding_count": 0
+    },
+    {
+      "id": "body-of-evidence",
+      "phase": "Release / Monitor",
+      "name": "Body-of-Evidence assembly",
+      "tools": [
+        "aggregate_evidence",
+        "map_controls",
+        "generate_poam",
+        "update_conmon",
+        "build_emass_package",
+        "build_dashboard_data"
+      ],
+      "raise_gate": [],
+      "fail_policy": "Always runs; produces controls/POA&M/ConMon/eMASS package/dashboard.",
+      "controls_evidenced": [
+        "AU-12",
+        "CA-2",
+        "CA-5",
+        "CA-7",
+        "PL-2",
+        "RA-3",
+        "SA-15",
+        "SA-3",
+        "SI-2"
+      ],
+      "executed": true,
+      "finding_count": 0
+    }
+  ]
+}

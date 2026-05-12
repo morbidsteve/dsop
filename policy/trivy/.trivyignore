@@ -1,0 +1,14 @@
+# Trivy / Grype vulnerability suppressions.
+#
+# RULES OF THE ROAD:
+#   * Every line MUST have a comment: the justification, the linked POA&M item / risk-acceptance
+#     issue, the approver, and a review-by date. Unjustified suppressions are a finding themselves
+#     (the SCA will check this file).
+#   * Suppressing here does NOT remove the item from the POA&M unless the risk has been formally
+#     accepted by the AO — it only stops the build from blocking on it.
+#   * Prefer fixing or upgrading over suppressing.
+#
+# Format: one CVE/GHSA id per line.
+
+# Example (delete — illustrative only):
+# CVE-2023-99999   # No fix available; not reachable from our code path (DAST + manual review). POA&M #42. Accepted by AO 2026-04-01. Review 2026-07-01.

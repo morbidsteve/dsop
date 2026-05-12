@@ -1,0 +1,27 @@
+# CODEOWNERS — change authorization & separation of duties.
+# RMF/SSDF evidence: CM-5 (access restrictions for change), AC-6 (least privilege),
+# CM-3 (configuration change control), SSDF PS.1 / PW.2.
+#
+# Required reviews on these paths give the AO/ISSM/SCA a documented approval chain. Replace the
+# placeholder teams with your real GitHub teams and require review from Code Owners in branch
+# protection.
+
+# Compliance content — must be reviewed by the security / RMF team (ISSM/ISSO/ISSE).
+/compliance/                @your-org/rmf-team
+/policy/                    @your-org/rmf-team @your-org/security-engineering
+/.github/workflows/         @your-org/security-engineering @your-org/platform-team
+/.github/dependabot.yml     @your-org/security-engineering
+/.github/CODEOWNERS         @your-org/rmf-team
+
+# Evidence engine — security engineering owns the scripts that build the BoE.
+/scripts/                   @your-org/security-engineering
+
+# AO dashboard.
+/site/                      @your-org/security-engineering @your-org/rmf-team
+
+# Application workload — the development team, with security engineering as secondary reviewer.
+/sample-app/                @your-org/app-team @your-org/security-engineering
+/deploy/                    @your-org/platform-team @your-org/security-engineering
+
+# Everything else.
+*                           @your-org/maintainers

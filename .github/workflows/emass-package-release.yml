@@ -1,0 +1,96 @@
+# eMASS Submission Package — build the formal upload-ready package on a version tag and attach it
+# to the GitHub Release.
+#
+# This produces the bundle that an ISSM / SCA / security control assessor takes into eMASS:
+#   emass-package/
+#     MANIFEST.json                 - machine index of every file + which control(s)/CCI(s) it supports
+#     ato-package-summary.md        - human-readable index + instructions
+#     controls.csv / controls.json  - per-control implementation status + narrative + test result
+#     test-results.csv              - control test results (Compliant / Non-Compliant / NA / Not Reviewed)
+#     poam.csv                      - POA&M in eMASS column layout (import-ready shape)
+#     hardware-software-list.csv    - HW/SW baseline derived from the SBOM
+#     ppsm.csv                      - Ports/Protocols/Services (from the SSP)
+#     artifacts/                    - the actual scan reports / SBOMs / attestations, tagged by category & type
+#   emass-package.zip               - the whole thing, zipped
+#
+# See docs/emass-submission-runbook.md for what to do with it.
+# IMPORTANT: confirm the exact eMASS POA&M import template columns against the CAC-protected
+# eMASS User Guide for your eMASS instance before importing — see compliance/crosswalks/emass-crosswalk.md.
+
+name: emass-package-release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to package (default: current)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-package:
+    name: Build & publish eMASS package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # to attach to the Release / create one
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r scripts/requirements.txt
+
+      # Prefer the freshest Body of Evidence artifact from the latest successful pipeline run; if
+      # none exists yet, run the gates inline is overkill — instead fall back to a fresh aggregate
+      # over whatever artifacts the most recent pipeline produced.
+      - name: Fetch latest body-of-evidence artifact
+        id: boe
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const arts = await github.rest.actions.listArtifactsForRepo({owner: context.repo.owner, repo: context.repo.repo, name: 'body-of-evidence', per_page: 1});
+            if (arts.data.artifacts.length === 0) { core.setOutput('found','false'); return; }
+            const a = arts.data.artifacts[0];
+            const dl = await github.rest.actions.downloadArtifact({owner: context.repo.owner, repo: context.repo.repo, artifact_id: a.id, archive_format: 'zip'});
+            require('fs').writeFileSync('boe.zip', Buffer.from(dl.data));
+            core.setOutput('found','true');
+      - name: Unpack Body of Evidence
+        if: steps.boe.outputs.found == 'true'
+        run: mkdir -p evidence && unzip -o boe.zip -d evidence
+      - name: (Fallback) seed an empty evidence tree
+        if: steps.boe.outputs.found != 'true'
+        run: |
+          echo "::warning::No body-of-evidence artifact found. Run the devsecops-pipeline workflow first for a complete package."
+          mkdir -p evidence/boe evidence/sbom
+
+      - name: Re-build control mapping & POA&M (ensures package matches the tagged commit's catalog/SSP)
+        run: |
+          python scripts/map_controls.py --evidence evidence --catalog compliance/control-catalog/control-catalog.yaml --out evidence/boe || true
+          python scripts/generate_poam.py --evidence evidence --thresholds policy/thresholds.yaml --out evidence/boe || true
+      - name: Build eMASS package
+        run: python scripts/build_emass_package.py --evidence evidence --catalog compliance/control-catalog/control-catalog.yaml --ssp compliance/ssp/system-security-plan.md --out evidence/emass-package --release "${{ github.ref_name }}"
+      - name: Zip it
+        run: (cd evidence && zip -r emass-package.zip emass-package)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: emass-package
+          path: |
+            evidence/emass-package/**
+            evidence/emass-package.zip
+          retention-days: 365
+      - name: Attach to the Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            evidence/emass-package.zip
+            evidence/emass-package/ato-package-summary.md
+            evidence/emass-package/poam.csv
+            evidence/emass-package/controls.csv
+          body_path: evidence/emass-package/ato-package-summary.md
+          append_body: true

@@ -1,0 +1,208 @@
+{
+  "generated": "2026-05-12T18:42:31Z",
+  "controls": {
+    "total": 49,
+    "results": {
+      "Compliant": 0,
+      "Non-Compliant": 0,
+      "Not Applicable": 0,
+      "Not Reviewed": 42,
+      "Not Reviewed (Inherited)": 0,
+      "Not Reviewed (Manual Assessment)": 7,
+      "Other": 0
+    },
+    "compliant": 0,
+    "noncompliant": 0,
+    "not_reviewed": 49,
+    "not_applicable": 0,
+    "by_family": {
+      "AC": {
+        "total": 3,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 3,
+        "Not Applicable": 0
+      },
+      "AT": {
+        "total": 1,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 1,
+        "Not Applicable": 0
+      },
+      "AU": {
+        "total": 3,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 3,
+        "Not Applicable": 0
+      },
+      "CA": {
+        "total": 5,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 5,
+        "Not Applicable": 0
+      },
+      "CM": {
+        "total": 9,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 9,
+        "Not Applicable": 0
+      },
+      "CP": {
+        "total": 1,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 1,
+        "Not Applicable": 0
+      },
+      "IA": {
+        "total": 2,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 2,
+        "Not Applicable": 0
+      },
+      "IR": {
+        "total": 2,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 2,
+        "Not Applicable": 0
+      },
+      "PL": {
+        "total": 2,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 2,
+        "Not Applicable": 0
+      },
+      "PM": {
+        "total": 1,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 1,
+        "Not Applicable": 0
+      },
+      "RA": {
+        "total": 2,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 2,
+        "Not Applicable": 0
+      },
+      "SA": {
+        "total": 6,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 6,
+        "Not Applicable": 0
+      },
+      "SC": {
+        "total": 4,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 4,
+        "Not Applicable": 0
+      },
+      "SI": {
+        "total": 4,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 4,
+        "Not Applicable": 0
+      },
+      "SR": {
+        "total": 4,
+        "Compliant": 0,
+        "Non-Compliant": 0,
+        "Not Reviewed": 4,
+        "Not Applicable": 0
+      }
+    },
+    "implementation_status": {
+      "hybrid": 22,
+      "implemented": 21,
+      "planned": 6
+    },
+    "automated_assessment_coverage_pct": 0.0,
+    "compliant_pct_of_assessed": 0.0
+  },
+  "findings": {
+    "total": 0,
+    "by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "info": 0
+    },
+    "by_gate": {},
+    "by_tool": {}
+  },
+  "poam": {
+    "open": 0,
+    "overdue": 0,
+    "out_of_raise_scope": 0,
+    "by_cat": {
+      "I": 0,
+      "II": 0,
+      "III": 0
+    }
+  },
+  "gates_executed": [],
+  "sbom_component_count": 0,
+  "scorecard_overall": null,
+  "raise_gates_status": [
+    {
+      "gate": 1,
+      "name": "SAST (custom source code)",
+      "satisfied_by": "sast",
+      "executed": false
+    },
+    {
+      "gate": 2,
+      "name": "Dependency list / SBOM",
+      "satisfied_by": "sbom + sca + license",
+      "executed": false
+    },
+    {
+      "gate": 3,
+      "name": "Secrets / keys detection",
+      "satisfied_by": "secrets",
+      "executed": false
+    },
+    {
+      "gate": 4,
+      "name": "Container security scanning",
+      "satisfied_by": "container",
+      "executed": false
+    },
+    {
+      "gate": 5,
+      "name": "DAST",
+      "satisfied_by": "dast",
+      "executed": false
+    },
+    {
+      "gate": 6,
+      "name": "RPOC ISSM review step",
+      "satisfied_by": "review (CODEOWNERS + ATO Status issue + dashboard)",
+      "executed": true
+    },
+    {
+      "gate": 7,
+      "name": "Sign the release container image",
+      "satisfied_by": "container (cosign/Sigstore + SLSA provenance)",
+      "executed": false
+    },
+    {
+      "gate": 8,
+      "name": "Store the release image in an artifact repository",
+      "satisfied_by": "container (push to GHCR)",
+      "executed": false
+    }
+  ]
+}

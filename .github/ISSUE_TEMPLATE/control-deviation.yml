@@ -1,0 +1,53 @@
+name: "Control deviation / risk acceptance request"
+description: "Request AO acceptance of residual risk for a control that is not fully met, or document a deviation/tailoring decision."
+title: "[RISK] <control ID> — <short description>"
+labels: ["risk-acceptance", "needs-ao-decision"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For decisions the **Authorizing Official** (or AODR) must make: accepting residual risk,
+        approving a control tailoring/deviation, or approving an exception to a remediation SLA.
+        RMF evidence: CA-6 (authorization), PM-9/RA-3 (risk), and the authorization decision
+        rationale. For RAISE-incorporated apps, residual risk **must not exceed Moderate**;
+        High-risk items are out of scope for RAISE and require normal RMF / AO escalation.
+  - type: input
+    id: control
+    attributes: { label: "Control / requirement ID", placeholder: "e.g., AU-6, SC-8(1), STIG V-xxxxx" }
+    validations: { required: true }
+  - type: dropdown
+    id: kind
+    attributes:
+      label: "Type of request"
+      options:
+        - "Accept residual risk (control partially met / not met)"
+        - "Approve control tailoring or NA determination"
+        - "Approve exception to remediation SLA (finding will exceed the SLA window)"
+        - "Approve inherited-control reliance (CRM gap)"
+    validations: { required: true }
+  - type: textarea
+    id: current_state
+    attributes: { label: "Current implementation state / what is and isn't in place" }
+    validations: { required: true }
+  - type: textarea
+    id: risk
+    attributes: { label: "Risk description — threat, likelihood, impact, residual risk level" }
+    validations: { required: true }
+  - type: textarea
+    id: mitigations
+    attributes: { label: "Compensating controls / mitigations" }
+  - type: textarea
+    id: plan
+    attributes: { label: "Path to full compliance (if any) + target date" }
+  - type: input
+    id: requested_by
+    attributes: { label: "Requested by (ISSM/ISSO/PM)" }
+    validations: { required: true }
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        **AO / AODR decision** (to be completed by the authorizing official):
+        - Decision: ⬜ Accepted ⬜ Accepted with conditions ⬜ Denied
+        - Conditions / expiration:
+        - Signature / GitHub handle + date:

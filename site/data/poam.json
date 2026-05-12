@@ -1,0 +1,15 @@
+{
+  "generated": "2026-05-12T18:42:31Z",
+  "policy": {
+    "min_severity": "low",
+    "sla_days": {
+      "critical": 21,
+      "high": 21,
+      "medium": 90,
+      "low": 365
+    },
+    "raise_residual_risk_ceiling": "moderate"
+  },
+  "count": 0,
+  "items": []
+}

@@ -1,0 +1,19 @@
+name: "DSOP CodeQL config"
+
+# Tune for your real workload. `security-extended` + `security-and-quality` query suites are
+# requested in the workflow; add custom query packs here if your program maintains them.
+queries:
+  - uses: security-extended
+  - uses: security-and-quality
+
+paths:
+  - sample-app
+  - scripts
+
+paths-ignore:
+  - "**/tests/**"
+  - "**/*.md"
+  - site/assets/**     # vendored / generated front-end assets
+
+# packs:
+#   - my-org/my-codeql-queries@^1.0.0
