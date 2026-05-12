@@ -22,6 +22,18 @@ version: 1
 enforce: true
 
 # ---- 1. Build-blocking gates -----------------------------------------------------------------
+#
+# ENFORCEMENT (what actually fails a run today, in this scaffold):
+#   * container Critical CVEs        -> scripts/evidence_common.py --gate-container
+#   * any committed secret           -> `gitleaks detect` exit code
+#   * a disallowed OSS license       -> scripts/evidence_common.py --check-licenses exit code
+#   * a Conftest/OPA `deny`          -> conftest exit / the IaC job
+#   * failing unit tests / coverage  -> pytest
+# The remaining `fail_on_severity` lists below are the *intended* policy. To make e.g. a new High
+# SAST finding actually fail the build, tighten the relevant tool's fail-condition (Semgrep
+# `--error`, CodeQL alert thresholds, Trivy `exit-code`, Grype `fail-build`) or extend
+# evidence_common.py with a `--gate-<x>` check. Everything that is NOT build-blocking is still
+# recorded, mapped to controls, and written to the POA&M with the remediation SLA below.
 gates:
 
   sast:                       # CodeQL + Semgrep
@@ -33,9 +45,12 @@ gates:
 
   sca:                        # Trivy fs + Grype + OWASP Dependency-Check (dependency vulns)
     fail_on_severity: [critical]
-    # A High dependency CVE with a fix available also fails; without a fix it goes to the POA&M
-    # (with the SLA window) rather than blocking, unless `block_high_with_fix` is widened.
-    block_high_with_fix: true
+    # Default: Critical = hard build stop. High findings are recorded and written to the POA&M with
+    # the remediation SLA (RAISE 2.0: raw High+ in production within 21 calendar days) rather than
+    # blocking the build — because you often can't fix base-image / transitive OS CVEs synchronously
+    # and the SLA (not a build block) is the actual RAISE control. Set `block_high_with_fix: true`
+    # if your AO requires High-with-a-fix-available to fail the build.
+    block_high_with_fix: false
     allow_unfixed_critical: false   # Critical with NO fix available still fails (forces a decision)
 
   secrets:                    # Gitleaks + TruffleHog + GitHub push protection
@@ -49,7 +64,11 @@ gates:
 
   container:                  # Trivy + Grype image scan
     fail_on_severity: [critical]
-    block_high_with_fix: true
+    # Same rationale as `sca` above: Critical image CVE = hard stop; High image CVEs (mostly the
+    # base image's OS packages, often "won't fix" or not-yet-rebuilt) are recorded + POA&M'd with
+    # the RAISE 21-day SLA. Use a DoD-hardened base image (Iron Bank / Repo One) to drive the High
+    # count toward zero. Set `block_high_with_fix: true` to make High-with-a-fix block the build.
+    block_high_with_fix: false
     # Hardening lints (Hadolint/Dockle): treat FATAL/CRITICAL findings as build-blocking.
     hardening_fail_levels: ["FATAL", "CRITICAL"]
     require_nonroot_user: true
