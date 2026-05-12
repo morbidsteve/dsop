@@ -668,3 +668,35 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # ---------------------------------------------------------------------------
+  # 13. Pipeline status — the single check used for branch protection.
+  #     Succeeds only if every security gate (and the build/test + BoE jobs) succeeded; fails if
+  #     any gate failed or was cancelled. (`body-of-evidence` runs with `if: always()`, so it's
+  #     always "success" here — the meaningful signal is the gate jobs.)
+  # ---------------------------------------------------------------------------
+  pipeline-status:
+    name: pipeline-status
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - build-test
+      - sast-semgrep
+      - sca-dependencies
+      - sbom-source
+      - secrets-scan
+      - iac-scan
+      - license-compliance
+      - container
+      - dast
+      - stig-scap
+      - body-of-evidence
+    steps:
+      - name: Verify all pipeline gates passed
+        run: |
+          echo "Gate results: ${{ join(needs.*.result, ', ') }}"
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::One or more pipeline gates failed or were cancelled — see the run for details."
+            exit 1
+          fi
+          echo "All pipeline gates passed."
