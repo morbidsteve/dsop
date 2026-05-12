@@ -108,7 +108,7 @@ jobs:
           [ -f semgrep.sarif ] || echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"semgrep"}},"results":[]}]}' > semgrep.sarif
       - name: Upload SARIF to code scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep.sarif
           category: semgrep
@@ -176,7 +176,7 @@ jobs:
         continue-on-error: true
       - name: Upload SARIF to code scanning (Trivy fs)
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
@@ -312,7 +312,7 @@ jobs:
           ./conftest test sample-app/Dockerfile --parser dockerfile --policy policy/opa --output json > conftest-dockerfile.json || true
       - name: Upload SARIF to code scanning (Checkov)
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: checkov.sarif
           category: checkov
@@ -473,13 +473,13 @@ jobs:
           push-to-registry: true
       - name: Upload SARIF to code scanning (Trivy image · Hadolint)
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-image.sarif
           category: trivy-image
       - name: Upload SARIF to code scanning (Hadolint)
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: hadolint.sarif
           category: hadolint
