@@ -82,20 +82,19 @@ rules:
       - pattern: subprocess.Popen(..., shell=True, ...)
       - pattern: subprocess.call(..., shell=True, ...)
 
-  - id: dsop-dockerfile-root-user
+  - id: dsop-dockerfile-user-root
     languages: [dockerfile]
     severity: WARNING
     message: >-
-      Container appears to run as root (no non-root USER, or USER root at the end). Run as a
-      non-root user with least privilege (CM-6, AC-6; NIST SP 800-190; RAISE container hardening).
+      Container instruction sets USER root — run as a non-root user with least privilege
+      (CM-6, AC-6; NIST SP 800-190; RAISE container hardening). (The "no USER at all" case is also
+      covered by Hadolint, Dockle, and policy/opa/container_image.rego.)
     metadata:
       category: security
       controls: ["CM-6", "AC-6"]
-    patterns:
-      - pattern-either:
-          - pattern: |
-              USER root
-          - pattern-regex: '(?s)^(?!.*\nUSER\s+(?!root)\S+).*$'   # no non-root USER instruction anywhere
+    pattern-either:
+      - pattern: USER root
+      - pattern: USER 0
 
   - id: dsop-debug-true-in-prod-config
     languages: [python]
