@@ -8,7 +8,7 @@
   "authorization_type": "(REPLACE) ATO | continuous ATO (cATO) | RAISE 2.0 incorporation into an RPOC's ATO",
   "rpoc": "(REPLACE) The RAISE Platform of Choice (RPOC) this application is incorporated into, if applicable (e.g., Overmatch Software Armory)",
   "emass_system_id": "(REPLACE) <eMASS system ID>",
-  "repo": "your-org/your-repo",
+  "repo": "morbidsteve/dsop",
   "ref": "main",
   "sha": "",
   "run_url": "",

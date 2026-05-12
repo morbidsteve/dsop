@@ -7,21 +7,21 @@
 # protection.
 
 # Compliance content — must be reviewed by the security / RMF team (ISSM/ISSO/ISSE).
-/compliance/                @your-org/rmf-team
-/policy/                    @your-org/rmf-team @your-org/security-engineering
-/.github/workflows/         @your-org/security-engineering @your-org/platform-team
-/.github/dependabot.yml     @your-org/security-engineering
-/.github/CODEOWNERS         @your-org/rmf-team
+/compliance/                @morbidsteve
+/policy/                    @morbidsteve
+/.github/workflows/         @morbidsteve
+/.github/dependabot.yml     @morbidsteve
+/.github/CODEOWNERS         @morbidsteve
 
 # Evidence engine — security engineering owns the scripts that build the BoE.
-/scripts/                   @your-org/security-engineering
+/scripts/                   @morbidsteve
 
 # AO dashboard.
-/site/                      @your-org/security-engineering @your-org/rmf-team
+/site/                      @morbidsteve
 
 # Application workload — the development team, with security engineering as secondary reviewer.
-/sample-app/                @your-org/app-team @your-org/security-engineering
-/deploy/                    @your-org/platform-team @your-org/security-engineering
+/sample-app/                @morbidsteve
+/deploy/                    @morbidsteve
 
 # Everything else.
-*                           @your-org/maintainers
+*                           @morbidsteve
