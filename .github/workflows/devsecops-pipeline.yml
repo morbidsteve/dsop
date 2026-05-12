@@ -150,7 +150,7 @@ jobs:
         env:
           TRIVY_CONFIG: policy/trivy/trivy.yaml
       - name: Grype dependency scan -> SARIF + JSON
-        uses: anchore/scan-action@v5
+        uses: anchore/scan-action@v7
         id: grype
         with:
           path: .
