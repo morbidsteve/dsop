@@ -17,11 +17,62 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evidence_common import load_json, load_yaml, dump_json, now_iso  # noqa: E402
+
+# Markdown docs surfaced (rendered) in the dashboard's "Docs" tab. (category, title, repo-path)
+DOC_SET = [
+    ("Authorization & RMF", "References & frameworks (annotated)", "compliance/references.md"),
+    ("Authorization & RMF", "Roles & responsibilities", "compliance/roles-and-responsibilities.md"),
+    ("Authorization & RMF", "System Security Plan (SSP) — template", "compliance/ssp/system-security-plan.md"),
+    ("Authorization & RMF", "Continuous monitoring (ISCM) strategy", "compliance/conmon/continuous-monitoring-strategy.md"),
+    ("Authorization & RMF", "CCIs & assessment procedures", "compliance/control-catalog/ccis-and-assessment-procedures.md"),
+    ("Authorization & RMF", "Compliance content — overview", "compliance/README.md"),
+    ("Crosswalks", "Navy RAISE 2.0 ↔ this repo", "compliance/crosswalks/raise-2.0-crosswalk.md"),
+    ("Crosswalks", "DoD cATO ↔ this repo (and the gaps)", "compliance/crosswalks/cato-evaluation-crosswalk.md"),
+    ("Crosswalks", "NIST SSDF (SP 800-218) ↔ this repo", "compliance/crosswalks/ssdf-800-218-crosswalk.md"),
+    ("Crosswalks", "eMASS ↔ this repo (+ import notes)", "compliance/crosswalks/emass-crosswalk.md"),
+    ("Crosswalks", "DoD DevSecOps Reference Design ↔ this repo", "compliance/crosswalks/devsecops-reference-design-crosswalk.md"),
+    ("Pipeline & operations", "Pipeline gates (tool · controls · policy)", "docs/pipeline-gates.md"),
+    ("Pipeline & operations", "Architecture (diagrams)", "docs/architecture.md"),
+    ("Pipeline & operations", "AO / SCA / ISSM quickstart", "docs/ao-quickstart.md"),
+    ("Pipeline & operations", "eMASS submission runbook", "docs/emass-submission-runbook.md"),
+    ("Pipeline & operations", "Impact-level notes (IL2 vs IL4/IL5)", "docs/impact-level-notes.md"),
+    ("Getting started", "Repository overview (README)", "README.md"),
+    ("Getting started", "Getting started — adopt the template", "docs/getting-started.md"),
+    ("Getting started", "Vulnerability disclosure policy (SECURITY)", "SECURITY.md"),
+    ("Getting started", "Changelog", "CHANGELOG.md"),
+    ("Getting started", "Contributing", "CONTRIBUTING.md"),
+]
+
+
+def copy_docs(site_dir: Path, repo_root: Path = Path(".")):
+    """Copy the curated markdown docs into <site>/docs/ (flattened filenames) and write
+    <site>/data/docs.json (the index the dashboard's Docs tab consumes). The Docs tab renders
+    these in-page; each also links to its GitHub-rendered view."""
+    docs_dir = site_dir / "docs"
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    index = []
+    for category, title, relpath in DOC_SET:
+        src = repo_root / relpath
+        flat = relpath.replace("/", "__")
+        entry = {"category": category, "title": title, "path": relpath, "file": flat}
+        if src.is_file():
+            try:
+                shutil.copy2(src, docs_dir / flat)
+                entry["bytes"] = src.stat().st_size
+            except Exception as exc:
+                entry["error"] = f"copy failed: {exc}"
+        else:
+            entry["error"] = "source file not found"
+        index.append(entry)
+    dump_json({"generated": now_iso(), "count": len(index), "documents": index}, site_dir / "data" / "docs.json")
+    n_ok = sum(1 for e in index if "error" not in e)
+    print(f"Docs: copied {n_ok}/{len(index)} markdown doc(s) into {docs_dir}; wrote {site_dir/'data'/'docs.json'}.")
 
 # Static description of the DevSecOps lifecycle gates this pipeline runs. (The control mapping is
 # pulled live from the catalog so it stays in sync.)
@@ -169,6 +220,9 @@ def build_data(args):
         pipe.append(gg)
     dump_json({"generated": now_iso(), "gates": pipe}, data / "pipeline.json")
 
+    # Copy the compliance/docs markdown into site/docs/ + write the Docs-tab index.
+    copy_docs(site, repo_root=Path(getattr(args, "repo_root", ".") or "."))
+
     print(f"Dashboard data written to {data} — {len(controls)} controls, {len(findings)} findings, "
           f"{poam.get('total_items', 0)} POA&M, {len(snaps)} ConMon snapshots.")
 
@@ -259,6 +313,7 @@ def main():
     ap.add_argument("--ref", default="")
     ap.add_argument("--sha", default="")
     ap.add_argument("--run-url", default="")
+    ap.add_argument("--repo-root", default=".")
     ap.add_argument("--status-issue-md", action="store_true")
     ap.add_argument("--out", default="ato-status.md")
     a = ap.parse_args()

@@ -597,7 +597,8 @@ jobs:
       - dast
       - stig-scap
     permissions:
-      contents: write   # to attach evidence to a Release when triggered by `release: published`
+      contents: write           # to attach evidence to a Release when triggered by `release: published`
+      security-events: read     # to pull CodeQL alerts from code scanning into the consolidated findings
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -616,6 +617,19 @@ jobs:
         with:
           path: raw-evidence/build-test-results
           name: build-test-results
+      - name: Pull CodeQL alerts from code scanning (runs in a separate workflow)
+        # CodeQL uploads to GitHub code scanning, not to a workflow artifact, so fetch its open
+        # alerts here so they land in the consolidated findings too. (Other tools' SARIF is already
+        # in the evidence-* artifacts; the aggregator only ingests CodeQL alerts from this file to
+        # avoid double-counting.)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p raw-evidence/evidence-codescanning
+          OUT=raw-evidence/evidence-codescanning/codescanning-alerts.json
+          gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&per_page=100" > "$OUT" 2>/dev/null || echo "[]" > "$OUT"
+          python -c "import json; d=json.load(open('$OUT')); print('code-scanning alerts pulled:', len(d) if isinstance(d,list) else 0)" 2>/dev/null || echo "[]" > "$OUT"
       - name: 1) Aggregate & normalize all scanner outputs
         run: python scripts/aggregate_evidence.py --input raw-evidence --out ${{ env.EVIDENCE_DIR }} --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - name: 2) Map findings + gate coverage to NIST 800-53 controls

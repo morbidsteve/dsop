@@ -98,3 +98,42 @@ details.pm .flag{font-size:.7rem;padding:.05em .4em;border-radius:3px;font-weigh
 
 footer{display:flex;justify-content:space-between;gap:1rem;padding:14px 22px;border-top:1px solid var(--border);color:var(--muted);font-size:.78rem;flex-wrap:wrap}
 .empty{color:var(--muted);padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px}
+
+/* ---- Docs tab ---- */
+.docs-layout{display:grid;grid-template-columns:280px 1fr;gap:14px;align-items:start}
+@media(max-width:900px){.docs-layout{grid-template-columns:1fr}}
+#docs-nav{position:sticky;top:14px;max-height:calc(100vh - 130px);overflow:auto}
+#docs-nav .docgroup{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:12px 0 4px;font-weight:700}
+#docs-nav .docgroup:first-child{margin-top:0}
+#docs-nav a{display:block;padding:5px 8px;border-radius:6px;color:var(--text);font-size:.85rem;border-left:2px solid transparent}
+#docs-nav a:hover{background:var(--panel2);text-decoration:none}
+#docs-nav a.active{background:var(--panel2);border-left-color:var(--accent);color:#fff}
+#docs-nav a small{display:block;color:var(--muted);font-size:.72rem;font-weight:400}
+#docs-content{min-height:60vh}
+.docs-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:12px;flex-wrap:wrap}
+.docs-toolbar .path{font-family:ui-monospace,monospace;font-size:.8rem;color:var(--muted)}
+
+/* ---- rendered markdown ---- */
+.md-rendered{line-height:1.65;font-size:.92rem}
+.md-rendered h1{font-size:1.5rem;margin:1.2rem 0 .6rem;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+.md-rendered h2{font-size:1.25rem;margin:1.4rem 0 .5rem;border-bottom:1px solid var(--border);padding-bottom:.25rem}
+.md-rendered h3{font-size:1.08rem;margin:1.1rem 0 .4rem}
+.md-rendered h4{font-size:.98rem;margin:.9rem 0 .35rem;color:var(--muted)}
+.md-rendered h5,.md-rendered h6{font-size:.9rem;margin:.8rem 0 .3rem;color:var(--muted)}
+.md-rendered p{margin:.6rem 0}
+.md-rendered ul,.md-rendered ol{margin:.5rem 0 .5rem 1.4rem;padding:0}
+.md-rendered li{margin:.2rem 0}
+.md-rendered a{color:var(--accent)}
+.md-rendered code{background:#0008;border:1px solid var(--border);border-radius:4px;padding:.06em .35em;font-size:.86em}
+.md-rendered pre{background:#0b0f14;border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;margin:.8rem 0}
+.md-rendered pre code{background:none;border:none;padding:0;font-size:.82rem;color:#c9d1d9}
+.md-rendered blockquote{border-left:3px solid var(--warn);background:#1b1b0d22;margin:.8rem 0;padding:.4rem .9rem;color:#d9d4c0;border-radius:0 6px 6px 0}
+.md-rendered hr{border:none;border-top:1px solid var(--border);margin:1.2rem 0}
+.md-rendered table{width:100%;border-collapse:collapse;margin:.8rem 0;font-size:.84rem;display:block;overflow-x:auto}
+.md-rendered th,.md-rendered td{border:1px solid var(--border);padding:6px 9px;text-align:left;vertical-align:top}
+.md-rendered th{background:var(--panel2);color:var(--muted);font-weight:600}
+.md-rendered tr:nth-child(even) td{background:#0d12190a}
+.md-rendered img{max-width:100%}
+.md-rendered strong{color:#fff}
+.md-rendered .mermaid-src{background:#0b0f14;border:1px dashed var(--border);border-radius:8px;padding:10px;margin:.8rem 0;font-size:.78rem;color:var(--muted)}
+.md-rendered .mermaid-src::before{content:"mermaid diagram (view on GitHub for the rendered version):";display:block;color:var(--accent);margin-bottom:6px;font-size:.75rem}

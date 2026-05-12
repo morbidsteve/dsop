@@ -3,7 +3,7 @@
 "use strict";
 
 const DATA = {};
-const FILES = ["meta", "summary", "controls", "findings", "poam", "conmon", "pipeline"];
+const FILES = ["meta", "summary", "controls", "findings", "poam", "conmon", "pipeline", "docs"];
 
 async function loadAll() {
   await Promise.all(FILES.map(async f => {
@@ -20,14 +20,20 @@ const cls = r => (r === "Compliant" ? "Compliant" : r === "Non-Compliant" ? "Non
   (r || "").startsWith("Not Applicable") ? "NotApplicable" : "NotReviewed");
 
 /* ---- tabs ---- */
+function activateTab(name) {
+  $$("#tabs button").forEach(x => x.classList.toggle("active", x.dataset.tab === name));
+  $$(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
+}
 function initTabs() {
   $$("#tabs button").forEach(b => b.addEventListener("click", () => {
-    $$("#tabs button").forEach(x => x.classList.toggle("active", x === b));
-    $$(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + b.dataset.tab));
-    location.hash = b.dataset.tab;
+    activateTab(b.dataset.tab);
+    // preserve a #docs/<path> deep-link if we're already on it; otherwise set the bare tab hash
+    if (!(b.dataset.tab === "docs" && (location.hash || "").startsWith("#docs/"))) location.hash = b.dataset.tab;
   }));
-  const h = (location.hash || "#status").slice(1);
-  const btn = $(`#tabs button[data-tab="${h}"]`); if (btn) btn.click();
+  // initial: a hash like "#docs/<path>" maps to the "docs" tab; "#findings" -> "findings"; default "status"
+  const raw = (location.hash || "#status").slice(1);
+  const base = raw.split("/")[0] || "status";
+  activateTab($(`#tabs button[data-tab="${base}"]`) ? base : "status");
 }
 
 /* ---- header ---- */
@@ -245,9 +251,148 @@ function renderPackage() {
   }
 }
 
+/* ---- DOCS (markdown rendered in-page) ---- */
+// Compact Markdown -> HTML. Handles: ATX headings, bold/italic/inline-code, links, fenced code,
+// blockquotes, GFM tables, hr, unordered/ordered lists, paragraphs. Everything is HTML-escaped
+// first (defense-in-depth); ```mermaid``` blocks are shown as source with a note (rendered version
+// is on GitHub). Not a full CommonMark engine — enough for these docs.
+function mdInline(s) {
+  s = esc(s);
+  // inline code first (so * and _ inside code aren't touched)
+  s = s.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  // links [text](url)
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, t, u) => {
+    const safe = /^(https?:|mailto:|#|\.{0,2}\/)/i.test(u) ? u : "#";
+    const ext = /^https?:/i.test(safe) ? ' target="_blank" rel="noopener"' : "";
+    return `<a href="${safe}"${ext}>${t}</a>`;
+  });
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, "$1<em>$2</em>");
+  s = s.replace(/(^|[^_])_(?!_)([^_]+?)_(?!_)/g, "$1<em>$2</em>");
+  return s;
+}
+function mdToHtml(md) {
+  const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
+  let html = "", i = 0;
+  const closeLists = (stack) => { while (stack.length) html += stack.pop() === "ul" ? "</ul>" : "</ol>"; };
+  let listStack = [];
+  while (i < lines.length) {
+    let line = lines[i];
+    // fenced code block
+    const fence = line.match(/^(\s*)(```+|~~~+)\s*(\S*)/);
+    if (fence) {
+      closeLists(listStack); listStack = [];
+      const lang = (fence[3] || "").toLowerCase();
+      const buf = []; i++;
+      while (i < lines.length && !/^(\s*)(```+|~~~+)\s*$/.test(lines[i])) { buf.push(lines[i]); i++; }
+      i++; // skip closing fence
+      const code = esc(buf.join("\n"));
+      html += lang === "mermaid"
+        ? `<pre class="mermaid-src"><code>${code}</code></pre>`
+        : `<pre><code data-lang="${esc(lang)}">${code}</code></pre>`;
+      continue;
+    }
+    // hr
+    if (/^\s*([-*_])\s*\1\s*\1[\s\-*_]*$/.test(line) && line.trim().length >= 3 && !/^\s*[-*]\s/.test(line)) {
+      closeLists(listStack); listStack = []; html += "<hr>"; i++; continue;
+    }
+    // heading
+    const h = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (h) { closeLists(listStack); listStack = []; html += `<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`; i++; continue; }
+    // blockquote (collect consecutive)
+    if (/^\s*>\s?/.test(line)) {
+      closeLists(listStack); listStack = [];
+      const buf = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) { buf.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
+      html += `<blockquote>${mdToHtml(buf.join("\n"))}</blockquote>`;
+      continue;
+    }
+    // table (a header row, then a |---|---| separator row)
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
+      closeLists(listStack); listStack = [];
+      const splitRow = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      const headers = splitRow(line);
+      i += 2;
+      let body = "";
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { body += "<tr>" + splitRow(lines[i]).map(c => `<td>${mdInline(c)}</td>`).join("") + "</tr>"; i++; }
+      html += `<table><thead><tr>${headers.map(c => `<th>${mdInline(c)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
+      continue;
+    }
+    // list item
+    const ul = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    const ol = line.match(/^(\s*)\d+[.)]\s+(.*)$/);
+    if (ul || ol) {
+      const kind = ul ? "ul" : "ol";
+      if (!listStack.length || listStack[listStack.length - 1] !== kind) {
+        // simple flat lists (no nesting depth tracking — good enough for these docs)
+        closeLists(listStack); listStack = [kind]; html += kind === "ul" ? "<ul>" : "<ol>";
+      }
+      html += `<li>${mdInline((ul || ol)[2])}</li>`;
+      i++; continue;
+    }
+    // blank line
+    if (/^\s*$/.test(line)) { closeLists(listStack); listStack = []; i++; continue; }
+    // paragraph (collect consecutive non-special lines)
+    closeLists(listStack); listStack = [];
+    const buf = [line]; i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6})\s/.test(lines[i]) && !/^\s*(```+|~~~+|>|\|.*\||[-*+]\s|\d+[.)]\s)/.test(lines[i])) { buf.push(lines[i]); i++; }
+    html += `<p>${mdInline(buf.join(" "))}</p>`;
+  }
+  closeLists(listStack);
+  return html;
+}
+
+let DOCS_INDEX = [];
+function renderDocsTab() {
+  const d = DATA.docs || {};
+  DOCS_INDEX = d.documents || [];
+  const repo = (DATA.meta || {}).repo;
+  const ghBase = repo && repo.includes("/") ? `https://github.com/${repo}/blob/${(DATA.meta || {}).ref || "main"}/` : null;
+  const nav = $("#docs-nav");
+  if (!DOCS_INDEX.length) {
+    nav.innerHTML = `<div class="empty">No document index yet — the pipeline copies the compliance docs into the site on each run.${ghBase ? ` Meanwhile, browse them <a href="${ghBase}compliance">on GitHub</a>.` : ""}</div>`;
+    return;
+  }
+  const groups = {};
+  DOCS_INDEX.forEach(doc => { (groups[doc.category || "Documents"] ||= []).push(doc); });
+  nav.innerHTML = Object.entries(groups).map(([cat, docs]) =>
+    `<div class="docgroup">${esc(cat)}</div>` + docs.map(doc =>
+      `<a href="#docs/${encodeURIComponent(doc.path)}" data-doc="${esc(doc.path)}">${esc(doc.title)}<small>${esc(doc.path)}</small></a>`).join("")
+  ).join("");
+  // wire clicks (also handled via hashchange below)
+  nav.querySelectorAll("a[data-doc]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); openDoc(a.dataset.doc); }));
+  // open from hash, else the first doc
+  const h = decodeURIComponent((location.hash || "").replace(/^#docs\/?/, ""));
+  openDoc(h && DOCS_INDEX.some(x => x.path === h) ? h : DOCS_INDEX[0].path);
+}
+async function openDoc(path) {
+  const doc = DOCS_INDEX.find(x => x.path === path) || DOCS_INDEX[0];
+  if (!doc) return;
+  $("#docs-nav").querySelectorAll("a[data-doc]").forEach(a => a.classList.toggle("active", a.dataset.doc === doc.path));
+  const repo = (DATA.meta || {}).repo;
+  const ghUrl = repo && repo.includes("/") ? `https://github.com/${repo}/blob/${(DATA.meta || {}).ref || "main"}/${doc.path}` : null;
+  const content = $("#docs-content");
+  content.innerHTML = `<div class="docs-toolbar"><div><strong>${esc(doc.title)}</strong> <span class="path">${esc(doc.path)}</span></div>${ghUrl ? `<a href="${ghUrl}" target="_blank" rel="noopener">↗ view on GitHub</a>` : ""}</div><p class="muted">loading…</p>`;
+  try {
+    const r = await fetch(`docs/${doc.file || doc.path.split("/").pop()}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const md = await r.text();
+    content.innerHTML = `<div class="docs-toolbar"><div><strong>${esc(doc.title)}</strong> <span class="path">${esc(doc.path)}</span></div>${ghUrl ? `<a href="${ghUrl}" target="_blank" rel="noopener">↗ view on GitHub</a>` : ""}</div>` + mdToHtml(md);
+    content.scrollIntoView({ block: "start", behavior: "instant" });
+  } catch (e) {
+    content.innerHTML = `<div class="docs-toolbar"><div><strong>${esc(doc.title)}</strong> <span class="path">${esc(doc.path)}</span></div>${ghUrl ? `<a href="${ghUrl}" target="_blank" rel="noopener">↗ view on GitHub</a>` : ""}</div><div class="empty">Could not load this document from the site (${esc(e.message)}).${ghUrl ? ` Read it <a href="${ghUrl}" target="_blank" rel="noopener">on GitHub</a>.` : ""}</div>`;
+  }
+}
+window.addEventListener("hashchange", () => {
+  if ((location.hash || "").startsWith("#docs/")) {
+    const p = decodeURIComponent(location.hash.replace(/^#docs\/?/, ""));
+    if (DOCS_INDEX.some(x => x.path === p)) openDoc(p);
+  }
+});
+
 /* ---- boot ---- */
 (async function () {
   await loadAll();
-  renderHeader(); renderStatus(); renderControlsTab(); renderFindingsTab(); renderPoamTab(); renderConmon(); renderPipeline(); renderPackage();
+  renderHeader(); renderStatus(); renderControlsTab(); renderFindingsTab(); renderPoamTab(); renderConmon(); renderPipeline(); renderPackage(); renderDocsTab();
   initTabs();
 })();

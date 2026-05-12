@@ -1,10 +1,10 @@
 [project]
-name = "dsop-sample-app"
-version = "0.1.0"
-description = "Demonstration workload for the DSOP DevSecOps reference pipeline"
+name = "dsop-evidence-helper"
+version = "0.2.0"
+description = "Demonstration workload for the DSOP DevSecOps reference pipeline (compliance evidence helper API)"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-dependencies = ["Flask>=3.0", "gunicorn>=23.0"]
+dependencies = ["Flask>=3.0", "gunicorn>=23.0", "PyYAML>=6.0"]
 
 [tool.ruff]
 line-length = 110
