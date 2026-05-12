@@ -50,7 +50,7 @@ jobs:
             scorecard-results.sarif
             scorecard-results.json
           retention-days: 90
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: scorecard-results.sarif
           category: scorecard
