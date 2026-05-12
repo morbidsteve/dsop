@@ -53,7 +53,7 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install app + test deps
@@ -90,7 +90,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install Semgrep
@@ -601,7 +601,7 @@ jobs:
       security-events: read     # to pull CodeQL alerts from code scanning into the consolidated findings
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r scripts/requirements.txt
