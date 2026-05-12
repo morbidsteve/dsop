@@ -205,7 +205,7 @@ def main():
         "total_items": len(items),
         "overdue": sum(1 for i in items if i["overdue"]),
         "out_of_raise_scope": sum(1 for i in items if i["out_of_raise_scope"]),
-        "by_cat": {c: sum(1 for i in items if i["severity_value"].endswith(c)) for c in ("I", "II", "III")},
+        "by_cat": {c: sum(1 for i in items if i["severity_value"].split()[-1] == c) for c in ("I", "II", "III")},
         "items": items,
     }, out_dir / "poam.json")
 
@@ -226,7 +226,7 @@ def main():
 
     print(f"POA&M: {len(items)} item(s) — {sum(1 for i in items if i['overdue'])} overdue, "
           f"{sum(1 for i in items if i['out_of_raise_scope'])} out-of-RAISE-scope. "
-          f"CAT I/II/III = {[sum(1 for i in items if i['severity_value'].endswith(c)) for c in ('I','II','III')]}")
+          f"CAT I/II/III = {[sum(1 for i in items if i['severity_value'].split()[-1] == c) for c in ('I','II','III')]}")
 
 
 if __name__ == "__main__":
