@@ -57,8 +57,8 @@ CMD ["/opt/venv/bin/gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--th
      "--access-logfile", "-", "--error-logfile", "-", "app.main:app"]
 
 # ---- OCI provenance / source-of-truth labels (SI-7 / SR-4) ----------------------------------
-LABEL org.opencontainers.image.title="dsop-sample-app" \
-      org.opencontainers.image.description="Demonstration workload for the DSOP DevSecOps reference pipeline" \
-      org.opencontainers.image.source="https://github.com/your-org/your-repo" \
+LABEL org.opencontainers.image.title="dsop-evidence-helper" \
+      org.opencontainers.image.description="Demonstration workload for the DSOP DevSecOps reference pipeline (compliance evidence helper API)" \
+      org.opencontainers.image.source="https://github.com/morbidsteve/dsop" \
       org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.vendor="Your Program Office"
+      org.opencontainers.image.vendor="DSOP reference"

@@ -1,0 +1,153 @@
+{
+  "generated": "2026-05-12T22:11:08Z",
+  "count": 21,
+  "documents": [
+    {
+      "category": "Authorization & RMF",
+      "title": "References & frameworks (annotated)",
+      "path": "compliance/references.md",
+      "file": "compliance__references.md",
+      "bytes": 18229
+    },
+    {
+      "category": "Authorization & RMF",
+      "title": "Roles & responsibilities",
+      "path": "compliance/roles-and-responsibilities.md",
+      "file": "compliance__roles-and-responsibilities.md",
+      "bytes": 7507
+    },
+    {
+      "category": "Authorization & RMF",
+      "title": "System Security Plan (SSP) \u2014 template",
+      "path": "compliance/ssp/system-security-plan.md",
+      "file": "compliance__ssp__system-security-plan.md",
+      "bytes": 9810
+    },
+    {
+      "category": "Authorization & RMF",
+      "title": "Continuous monitoring (ISCM) strategy",
+      "path": "compliance/conmon/continuous-monitoring-strategy.md",
+      "file": "compliance__conmon__continuous-monitoring-strategy.md",
+      "bytes": 8090
+    },
+    {
+      "category": "Authorization & RMF",
+      "title": "CCIs & assessment procedures",
+      "path": "compliance/control-catalog/ccis-and-assessment-procedures.md",
+      "file": "compliance__control-catalog__ccis-and-assessment-procedures.md",
+      "bytes": 4154
+    },
+    {
+      "category": "Authorization & RMF",
+      "title": "Compliance content \u2014 overview",
+      "path": "compliance/README.md",
+      "file": "compliance__README.md",
+      "bytes": 4676
+    },
+    {
+      "category": "Crosswalks",
+      "title": "Navy RAISE 2.0 \u2194 this repo",
+      "path": "compliance/crosswalks/raise-2.0-crosswalk.md",
+      "file": "compliance__crosswalks__raise-2.0-crosswalk.md",
+      "bytes": 17999
+    },
+    {
+      "category": "Crosswalks",
+      "title": "DoD cATO \u2194 this repo (and the gaps)",
+      "path": "compliance/crosswalks/cato-evaluation-crosswalk.md",
+      "file": "compliance__crosswalks__cato-evaluation-crosswalk.md",
+      "bytes": 11103
+    },
+    {
+      "category": "Crosswalks",
+      "title": "NIST SSDF (SP 800-218) \u2194 this repo",
+      "path": "compliance/crosswalks/ssdf-800-218-crosswalk.md",
+      "file": "compliance__crosswalks__ssdf-800-218-crosswalk.md",
+      "bytes": 8657
+    },
+    {
+      "category": "Crosswalks",
+      "title": "eMASS \u2194 this repo (+ import notes)",
+      "path": "compliance/crosswalks/emass-crosswalk.md",
+      "file": "compliance__crosswalks__emass-crosswalk.md",
+      "bytes": 9181
+    },
+    {
+      "category": "Crosswalks",
+      "title": "DoD DevSecOps Reference Design \u2194 this repo",
+      "path": "compliance/crosswalks/devsecops-reference-design-crosswalk.md",
+      "file": "compliance__crosswalks__devsecops-reference-design-crosswalk.md",
+      "bytes": 7682
+    },
+    {
+      "category": "Pipeline & operations",
+      "title": "Pipeline gates (tool \u00b7 controls \u00b7 policy)",
+      "path": "docs/pipeline-gates.md",
+      "file": "docs__pipeline-gates.md",
+      "bytes": 7670
+    },
+    {
+      "category": "Pipeline & operations",
+      "title": "Architecture (diagrams)",
+      "path": "docs/architecture.md",
+      "file": "docs__architecture.md",
+      "bytes": 4792
+    },
+    {
+      "category": "Pipeline & operations",
+      "title": "AO / SCA / ISSM quickstart",
+      "path": "docs/ao-quickstart.md",
+      "file": "docs__ao-quickstart.md",
+      "bytes": 5683
+    },
+    {
+      "category": "Pipeline & operations",
+      "title": "eMASS submission runbook",
+      "path": "docs/emass-submission-runbook.md",
+      "file": "docs__emass-submission-runbook.md",
+      "bytes": 7162
+    },
+    {
+      "category": "Pipeline & operations",
+      "title": "Impact-level notes (IL2 vs IL4/IL5)",
+      "path": "docs/impact-level-notes.md",
+      "file": "docs__impact-level-notes.md",
+      "bytes": 5878
+    },
+    {
+      "category": "Getting started",
+      "title": "Repository overview (README)",
+      "path": "README.md",
+      "file": "README.md",
+      "bytes": 20522
+    },
+    {
+      "category": "Getting started",
+      "title": "Getting started \u2014 adopt the template",
+      "path": "docs/getting-started.md",
+      "file": "docs__getting-started.md",
+      "bytes": 6548
+    },
+    {
+      "category": "Getting started",
+      "title": "Vulnerability disclosure policy (SECURITY)",
+      "path": "SECURITY.md",
+      "file": "SECURITY.md",
+      "bytes": 2778
+    },
+    {
+      "category": "Getting started",
+      "title": "Changelog",
+      "path": "CHANGELOG.md",
+      "file": "CHANGELOG.md",
+      "bytes": 5216
+    },
+    {
+      "category": "Getting started",
+      "title": "Contributing",
+      "path": "CONTRIBUTING.md",
+      "file": "CONTRIBUTING.md",
+      "bytes": 3103
+    }
+  ]
+}

@@ -85,13 +85,30 @@ def determine_test_result(control, gates, gates_executed, rel_findings):
     missing = [g for g in gates if g not in set(gates_executed)]
     if missing:
         return "Not Reviewed", f"Assessing gate(s) did not execute this run: {', '.join(sorted(missing))}."
-    bad = [f for f in rel_findings if f["severity"] in HIGH_OR_CRIT]
-    if bad:
-        worst = max((f["severity"] for f in bad), key=lambda s: SEVERITY_RANK.get(s, 0))
-        return "Non-Compliant", f"{len(bad)} open finding(s) at {worst}+ from the assessing gate(s) — see related findings / POA&M."
+    # Realistic automated verdict: a control is Non-Compliant only when the assessing gate(s) found
+    # a finding that is genuinely actionable-and-unremediated — i.e. Critical, or High *with a fix
+    # available*, or anything already past its remediation SLA. Otherwise (the gate ran; remaining
+    # open findings are lower-severity, or High/Critical with no fix yet — e.g. base-image OS CVEs
+    # the vendor hasn't patched) the control is Compliant *with the items tracked in the POA&M*.
+    # The SCA makes the final determination — this is an automated first pass.
+    blocking = [f for f in rel_findings
+                if f["severity"] == "critical"
+                or (f["severity"] == "high" and (f.get("fix") == "fixed"))
+                or f.get("overdue") is True]
     n = len(rel_findings)
-    return "Compliant", (f"Assessing gate(s) executed; {n} lower-severity finding(s) recorded (none High/Critical)."
-                         if n else "Assessing gate(s) executed; no findings.")
+    sev_counts = {s: sum(1 for f in rel_findings if f["severity"] == s) for s in ("critical", "high", "medium", "low")}
+    if blocking:
+        n_c = sum(1 for f in blocking if f["severity"] == "critical")
+        n_hf = sum(1 for f in blocking if f["severity"] == "high")
+        why = []
+        if n_c: why.append(f"{n_c} Critical")
+        if n_hf: why.append(f"{n_hf} High with a fix available")
+        return "Non-Compliant", (f"Assessing gate(s) executed; {', '.join(why)} unremediated finding(s) — see related findings / POA&M. "
+                                 f"(Total open: {sev_counts}.)")
+    if n:
+        return "Compliant", (f"Assessing gate(s) executed; {n} open finding(s) (none Critical or fix-available High), "
+                             f"all tracked in the POA&M: {sev_counts}. SCA validates.")
+    return "Compliant", "Assessing gate(s) executed; no findings."
 
 
 def main():

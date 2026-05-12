@@ -1,4 +1,7 @@
-# Runtime dependencies for the demonstration workload.
+# Runtime dependencies for the demonstration workload (a small "compliance evidence helper" API).
 # Pinned for reproducibility (CM-2 baseline configuration); Dependabot keeps these current (SI-2).
+# These pull in their own transitive deps (werkzeug, jinja2, markupsafe, click, blinker,
+# itsdangerous, packaging, ...) so the SBOM / SCA gates have a real, non-trivial component graph.
 Flask==3.0.3
 gunicorn==23.0.0
+PyYAML==6.0.2

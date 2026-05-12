@@ -64,5 +64,6 @@ disallowed:
 
 # Components to ignore entirely (e.g., your own first-party packages, internal mirrors).
 exclude_components:
-  - "pkg:pypi/sample-app"          # the demo app itself
+  - "pkg:pypi/dsop-evidence-helper"   # the demo app itself
+  - "pkg:pypi/sample-app"
   # - "pkg:pypi/your-internal-lib"

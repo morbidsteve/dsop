@@ -74,9 +74,28 @@ def parse_sarif(path: Path, run_url: str):
         return out
     for run in data.get("runs") or []:
         tool_name = (((run.get("tool") or {}).get("driver") or {}).get("name") or "sarif").lower()
-        tool = {"codeql": "codeql", "semgrep": "semgrep", "trivy": "trivy", "checkov": "checkov",
-                "kics": "kics", "kube-linter": "kube-linter", "hadolint": "hadolint",
-                "scorecard": "openssf-scorecard"}.get(tool_name, tool_name)
+        # Normalize tool names — SARIF drivers vary ("Semgrep OSS", "Semgrep CE", "CodeQL", "Trivy",
+        # "Checkov", "KICS", "kube-linter", "Hadolint", "Scorecard", ...). Substring match so we
+        # don't lose the gate attribution to the catch-all "other" bucket.
+        tn = tool_name
+        if "semgrep" in tn:
+            tool = "semgrep"
+        elif "codeql" in tn:
+            tool = "codeql"
+        elif "trivy" in tn:
+            tool = "trivy"
+        elif "checkov" in tn:
+            tool = "checkov"
+        elif "kics" in tn:
+            tool = "kics"
+        elif "kube-linter" in tn or "kubelinter" in tn:
+            tool = "kube-linter"
+        elif "hadolint" in tn:
+            tool = "hadolint"
+        elif "scorecard" in tn:
+            tool = "openssf-scorecard"
+        else:
+            tool = tn
         # disambiguate trivy fs vs image / checkov by category
         cat = (run.get("automationDetails") or {}).get("id") or ""
         if tool == "trivy" and "image" in (cat + str(path)).lower():
@@ -148,10 +167,11 @@ def parse_trivy(path: Path, run_url: str):
             out.append(mk("secrets", tool, s.get("Severity") or "HIGH", f"Secret: {s.get('Title') or s.get('RuleID')}",
                           location=f"{target}:{s.get('StartLine','')}", rule_id=s.get("RuleID"),
                           tags=["secret"], run_url=run_url, raw=path.name))
-        for li in res.get("Licenses") or []:
-            if str(li.get("Severity", "")).upper() in ("HIGH", "CRITICAL"):
-                out.append(mk("license", tool, li.get("Severity"), f"License: {li.get('Name')} on {li.get('PkgName')}",
-                              component=li.get("PkgName"), rule_id=li.get("Name"), tags=["license"], run_url=run_url, raw=path.name))
+        # NOTE: Trivy also emits a `Licenses` block, but its image-license output is dominated by
+        # the base image's (unactionable) Debian/Alpine GPL/LGPL packages — hundreds of "findings"
+        # that just add noise. The authoritative license signal is the dedicated `license-compliance`
+        # gate (CycloneDX SBOM evaluated against policy/allowed-licenses.yaml), so Trivy's License
+        # block is intentionally NOT ingested here.
     return out
 
 
@@ -401,6 +421,42 @@ def parse_license_report(path: Path, run_url: str):
     return out
 
 
+def parse_codescanning_alerts(path: Path, run_url: str):
+    """GitHub code-scanning alerts (from `gh api repos/.../code-scanning/alerts`). Used to bring
+    CodeQL (which runs in a separate workflow and uploads to code scanning, not to a workflow
+    artifact) into the consolidated findings. Other tools' alerts are skipped here because their
+    SARIF is already parsed directly from the run artifacts (avoids double-counting)."""
+    data = load_json(path)
+    out = []
+    if not isinstance(data, list):
+        return out
+    sevmap = {"critical": "critical", "high": "high", "medium": "medium", "low": "low",
+              "error": "high", "warning": "medium", "note": "low", "none": "info", "warn": "medium"}
+    for a in data:
+        if not isinstance(a, dict) or a.get("state") not in (None, "open"):
+            continue
+        tool = ((a.get("tool") or {}).get("name") or "").strip()
+        if "codeql" not in tool.lower():
+            continue  # other tools' findings come from their SARIF artifacts directly
+        rule = a.get("rule") or {}
+        sev = sevmap.get((rule.get("security_severity_level") or rule.get("severity") or "").lower(), "low")
+        loc = ""
+        inst = a.get("most_recent_instance") or {}
+        ploc = inst.get("location") or {}
+        if ploc.get("path"):
+            loc = f"{ploc['path']}:{ploc.get('start_line','')}".rstrip(":")
+        msg = (inst.get("message") or {}).get("text") or rule.get("description") or rule.get("name") or rule.get("id") or "CodeQL alert"
+        cwe = []
+        for t in (rule.get("tags") or []):
+            m = re.search(r"cwe[-/](\d+)", str(t), re.I)
+            if m:
+                cwe.append(f"CWE-{int(m.group(1))}")
+        out.append(mk("sast", "codeql", sev, msg, description=rule.get("full_description") or rule.get("description") or "",
+                      location=loc, rule_id=rule.get("id"), cwe=cwe,
+                      tags=["sast", "code-scanning"], run_url=a.get("html_url") or run_url, raw=path.name))
+    return out
+
+
 # --------------------------------------------------------------------------- SBOM collection
 def collect_sboms(root: Path, out_dir: Path):
     sbom_dir = out_dir / "sbom"
@@ -439,30 +495,48 @@ def collect_sboms(root: Path, out_dir: Path):
         except Exception:
             dump_json(data, dest)
         found.append(dest.name)
-        # merge components
+        # Merge components into a package-level inventory for the eMASS HW/SW baseline. Syft's
+        # image SBOMs also list every *file* in the image (type "file") — thousands of them — which
+        # is not a software baseline; we keep only real packages/applications/the OS.
+        keep_types = {"library", "application", "framework", "operating-system", "container", "module"}
         if data.get("bomFormat") == "CycloneDX" or "specVersion" in data:
             for c in (data.get("components") or []):
-                key = c.get("purl") or f"{c.get('name')}@{c.get('version')}"
+                ctype = (c.get("type") or "").lower()
+                purl = c.get("purl")
+                if ctype not in keep_types:
+                    continue
+                if not (purl or c.get("version")):       # skip the bare repo-root pseudo-component
+                    continue
+                key = purl or f"{c.get('name')}@{c.get('version')}"
                 if key and key not in components:
                     components[key] = {"name": c.get("name"), "version": c.get("version"),
-                                       "type": c.get("type"), "purl": c.get("purl"),
+                                       "type": c.get("type"), "purl": purl,
                                        "licenses": [l.get("license", {}).get("id") or l.get("license", {}).get("name") or l.get("expression")
                                                     for l in (c.get("licenses") or []) if isinstance(l, dict)]}
         elif "spdxVersion" in data:
             for pkg in (data.get("packages") or []):
-                key = (pkg.get("externalRefs") and next((r.get("referenceLocator") for r in pkg["externalRefs"] if r.get("referenceType") == "purl"), None)) \
-                      or f"{pkg.get('name')}@{pkg.get('versionInfo')}"
+                # SPDX packages from Syft include both real packages and (depending on catalogers)
+                # file-ish entries; keep ones that have a version or a purl.
+                purl = (pkg.get("externalRefs") and next((r.get("referenceLocator") for r in pkg["externalRefs"] if r.get("referenceType") == "purl"), None))
+                ver = pkg.get("versionInfo")
+                if not (purl or (ver and ver not in ("NOASSERTION", "", None))):
+                    continue
+                key = purl or f"{pkg.get('name')}@{ver}"
                 if key and key not in components:
-                    components[key] = {"name": pkg.get("name"), "version": pkg.get("versionInfo"),
-                                       "type": "library", "purl": None,
+                    components[key] = {"name": pkg.get("name"), "version": ver, "type": "library", "purl": purl,
                                        "licenses": [pkg.get("licenseConcluded") or pkg.get("licenseDeclared")]}
-    dump_json({"generated": now_iso(), "count": len(components), "components": sorted(components.values(), key=lambda x: (x.get("name") or "").lower())},
+    from collections import Counter
+    by_type = dict(Counter((c.get("type") or "library") for c in components.values()))
+    dump_json({"generated": now_iso(), "count": len(components), "by_type": by_type,
+               "note": "Software baseline (packages/applications/OS only — file-level SBOM entries excluded).",
+               "components": sorted(components.values(), key=lambda x: ((x.get("type") or ""), (x.get("name") or "").lower()))},
               sbom_dir / "components.json")
     return found, len(components)
 
 
 # --------------------------------------------------------------------------- driver
 PARSERS = [
+    (lambda n: "codescanning-alert" in n and n.endswith(".json"), parse_codescanning_alerts, "code-scanning"),
     (lambda n: n.endswith(".sarif") or n.endswith(".sarif.json"), parse_sarif, "sarif"),
     (lambda n: "trivy" in n and n.endswith(".json"), parse_trivy, "trivy"),
     (lambda n: "grype" in n and n.endswith(".json"), parse_grype, "grype"),

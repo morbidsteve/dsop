@@ -30,6 +30,7 @@
   <button data-tab="conmon">ConMon</button>
   <button data-tab="pipeline">Pipeline &amp; Gates</button>
   <button data-tab="package">eMASS Package</button>
+  <button data-tab="docs">Docs</button>
 </nav>
 
 <main>
@@ -156,14 +157,18 @@
       <p class="muted">Runbook: <code>docs/emass-submission-runbook.md</code>.</p>
     </div>
     <div class="panel">
-      <h3>Crosswalks (in the repo, under <code>compliance/crosswalks/</code>)</h3>
-      <ul>
-        <li><code>raise-2.0-crosswalk.md</code> — RAISE 2.0 RIG: the 8 Security Gates, the 24 RPOC requirements, the App-Owner artifacts, the quarterly-review deliverables</li>
-        <li><code>cato-evaluation-crosswalk.md</code> — DoD cATO 3 (+1) pillars + Implementation Guide + Evaluation Criteria — and the gaps</li>
-        <li><code>ssdf-800-218-crosswalk.md</code> — NIST SSDF PO/PS/PW/RV (+ the CISA attestation form)</li>
-        <li><code>emass-crosswalk.md</code> — eMASS data areas + POA&amp;M import notes</li>
-        <li><code>devsecops-reference-design-crosswalk.md</code> — DoD Enterprise DevSecOps lifecycle + control gates + Iron Bank</li>
-      </ul>
+      <h3>Crosswalks &amp; supporting documents</h3>
+      <p>All of the compliance documents — the RMF/cATO/RAISE&nbsp;2.0/SSDF/eMASS crosswalks, the SSP,
+      the ConMon strategy, the references bibliography, the runbooks — are readable right here in the
+      <a href="#docs">Docs tab</a> (and on GitHub).</p>
+    </div>
+  </section>
+
+  <!-- DOCS -------------------------------------------------------------------->
+  <section id="tab-docs" class="tab">
+    <div class="docs-layout">
+      <aside id="docs-nav" class="panel"><div class="muted">loading documents…</div></aside>
+      <article id="docs-content" class="panel md-rendered"><p class="muted">Select a document on the left.</p></article>
     </div>
   </section>
 </main>
