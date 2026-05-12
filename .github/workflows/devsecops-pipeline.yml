@@ -209,14 +209,12 @@ jobs:
           path: .
           format: spdx-json
           output-file: sbom-source.spdx.json
-          artifact-name: sbom-source.spdx.json
       - name: Generate CycloneDX SBOM
         uses: anchore/sbom-action@v0
         with:
           path: .
           format: cyclonedx-json
           output-file: sbom-source.cdx.json
-          artifact-name: sbom-source.cdx.json
       - name: Validate SBOM against NTIA minimum elements (informational)
         run: python scripts/evidence_common.py --validate-sbom sbom-source.cdx.json || true
       - uses: actions/upload-artifact@v4
@@ -306,10 +304,12 @@ jobs:
         continue-on-error: true
       - name: Conftest (OPA/Rego policy — Dockerfile, k8s, terraform)
         run: |
-          curl -sSfL https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64.tar.gz | tar xz -C /usr/local/bin conftest
-          conftest test deploy/k8s --policy policy/opa --output json > conftest-k8s.json || true
-          conftest test deploy/terraform --policy policy/opa --output json > conftest-tf.json || true
-          conftest test sample-app/Dockerfile --parser dockerfile --policy policy/opa --output json > conftest-dockerfile.json || true
+          CONFTEST_VERSION="0.56.0"
+          curl -sSfL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" | tar xz conftest
+          ./conftest verify --policy policy/opa || true   # surfaces any Rego compile errors in the log
+          ./conftest test deploy/k8s --policy policy/opa --output json > conftest-k8s.json || true
+          ./conftest test deploy/terraform --policy policy/opa --output json > conftest-tf.json || true
+          ./conftest test sample-app/Dockerfile --parser dockerfile --policy policy/opa --output json > conftest-dockerfile.json || true
       - name: Upload SARIF to code scanning (Checkov)
         if: always()
         uses: github/codeql-action/upload-sarif@v3
@@ -347,7 +347,6 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: sbom-license.cdx.json
-          artifact-name: sbom-license.cdx.json
       - name: Evaluate licenses against policy/allowed-licenses.yaml
         run: python scripts/evidence_common.py --check-licenses sbom-license.cdx.json policy/allowed-licenses.yaml --out license-report.json
       - uses: actions/upload-artifact@v4
@@ -448,27 +447,28 @@ jobs:
         id: push
         if: github.event_name != 'pull_request'
         run: |
-          IMG="${REGISTRY}/${IMAGE_NAME}:${{ needs.build-test.outputs.image-tag }}"
-          IMG_LC=$(echo "$IMG" | tr '[:upper:]' '[:lower:]')
-          docker tag "${IMAGE_NAME}:${{ needs.build-test.outputs.image-tag }}" "$IMG_LC"
-          docker push "$IMG_LC"
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMG_LC" | cut -d'@' -f2)
-          echo "image-ref=$IMG_LC" >> "$GITHUB_OUTPUT"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          IMG_NAME=$(echo "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')      # tagless: ghcr.io/<org>/<repo>/sample-app
+          IMG_REF="${IMG_NAME}:${{ needs.build-test.outputs.image-tag }}"
+          docker tag "${IMAGE_NAME}:${{ needs.build-test.outputs.image-tag }}" "$IMG_REF"
+          docker push "$IMG_REF"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMG_REF" | cut -d'@' -f2)
+          echo "image-name=$IMG_NAME" >> "$GITHUB_OUTPUT"
+          echo "image-ref=$IMG_REF"   >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST"        >> "$GITHUB_OUTPUT"
       - name: Install cosign
         if: github.event_name != 'pull_request'
         uses: sigstore/cosign-installer@v3
       - name: Sign image (keyless / Sigstore) and attach SBOM attestation
         if: github.event_name != 'pull_request'
         run: |
-          cosign sign --yes "${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}"
-          cosign attest --yes --predicate sbom-image.cdx.json --type cyclonedx \
-            "${{ steps.push.outputs.image-ref }}@${{ steps.push.outputs.digest }}"
+          REF="${{ steps.push.outputs.image-name }}@${{ steps.push.outputs.digest }}"
+          cosign sign --yes "$REF"
+          cosign attest --yes --predicate sbom-image.cdx.json --type cyclonedx "$REF"
       - name: Generate SLSA build provenance attestation
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ${{ steps.push.outputs.image-ref }}
+          subject-name: ${{ steps.push.outputs.image-name }}     # MUST be the tagless image name
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
       - name: Upload SARIF to code scanning (Trivy image · Hadolint)
@@ -604,10 +604,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -r scripts/requirements.txt
-      - name: Download all gate artifacts
+      - name: Download gate artifacts
         uses: actions/download-artifact@v4
         with:
           path: raw-evidence
+          pattern: "evidence-*"          # the gate outputs the aggregator needs
+          merge-multiple: false
+      - name: Download build/test artifact (optional)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: raw-evidence/build-test-results
+          name: build-test-results
       - name: 1) Aggregate & normalize all scanner outputs
         run: python scripts/aggregate_evidence.py --input raw-evidence --out ${{ env.EVIDENCE_DIR }} --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
       - name: 2) Map findings + gate coverage to NIST 800-53 controls
