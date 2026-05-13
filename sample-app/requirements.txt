@@ -4,4 +4,4 @@
 # itsdangerous, packaging, ...) so the SBOM / SCA gates have a real, non-trivial component graph.
 Flask==3.0.3
 gunicorn==23.0.0
-PyYAML==6.0.2
+PyYAML==6.0.3
